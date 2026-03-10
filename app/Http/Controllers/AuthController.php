@@ -16,7 +16,10 @@ class AuthController extends Controller
     public function showLogin()
     {
         if (Auth::check()) {
-            return redirect()->route(Auth::user()->is_admin ? 'admin.dashboard' : 'form.index');
+            /** @var User $user */
+            $user = Auth::user();
+
+            return redirect()->route($user->isAdmin() ? 'admin.dashboard' : 'form.index');
         }
         return view('auth.login');
     }
@@ -33,10 +36,12 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+
+            /** @var User $user */
             $user = Auth::user();
             
             return redirect()->intended(
-                $user->is_admin ? route('admin.dashboard') : route('form.index')
+                $user->isAdmin() ? route('admin.dashboard') : route('form.index')
             );
         }
 
@@ -71,7 +76,10 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         // Only admin can create users via form
-        if (!Auth::check() || !Auth::user()->is_admin) {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !$user->isAdmin()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -93,30 +101,30 @@ class AuthController extends Controller
         return response()->json($user, 201);
     }
 
-    /**
-     * Create first admin user (only available if no users exist)
-     */
-    public function createFirstAdmin(Request $request)
-    {
-        if (User::count() > 0) {
-            return response()->json(['error' => 'Users already exist'], 403);
-        }
+    // /**
+    //  * Create first admin user (only available if no users exist)
+    //  */
+    // public function createFirstAdmin(Request $request)
+    // {
+    //     if (User::count() > 0) {
+    //         return response()->json(['error' => 'Users already exist'], 403);
+    //     }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8|confirmed',
-        ]);
+    //     $validated = $request->validate([
+    //         'name' => 'required|string|max:255',
+    //         'email' => 'required|email|unique:users',
+    //         'password' => 'required|min:8|confirmed',
+    //     ]);
 
-        $admin = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'is_admin' => true,
-            'created_by_admin' => false,
-        ]);
+    //     $admin = User::create([
+    //         'name' => $validated['name'],
+    //         'email' => $validated['email'],
+    //         'password' => Hash::make($validated['password']),
+    //         'is_admin' => true,
+    //         'created_by_admin' => false,
+    //     ]);
 
-        Auth::login($admin);
-        return redirect()->route('admin.dashboard')->with('status', 'Admin account created successfully!');
-    }
+    //     Auth::login($admin);
+    //     return redirect()->route('admin.dashboard')->with('status', 'Admin account created successfully!');
+    // }
 }

@@ -8,6 +8,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminController extends Controller
@@ -98,8 +99,13 @@ class AdminController extends Controller
      */
     public function users(Request $request)
     {
-        $users = User::paginate(15);
-        return view('admin.users', ['users' => $users]);
+        $users = User::with('roles')->paginate(15);
+        $roles = Role::query()->orderBy('name')->pluck('name');
+
+        return view('admin.users', [
+            'users' => $users,
+            'roles' => $roles,
+        ]);
     }
 
     /**
@@ -111,16 +117,24 @@ class AdminController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',
-            'is_admin' => 'boolean',
+            'roles' => 'nullable|array',
+            'roles.*' => 'exists:roles,name',
         ]);
+
+        $selectedRoles = $validated['roles'] ?? [];
+        $isAdmin = in_array('admin', $selectedRoles, true);
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => bcrypt($validated['password']),
-            'is_admin' => $validated['is_admin'] ?? false,
+            'is_admin' => $isAdmin,
             'created_by_admin' => true,
         ]);
+
+        if (!empty($selectedRoles)) {
+            $user->syncRoles($selectedRoles);
+        }
 
         return back()->with('success', 'User created successfully');
     }
@@ -132,17 +146,24 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($id);
         
-        if ($user->id === Auth::id() && !$request->boolean('is_admin')) {
-            return back()->with('error', 'You cannot remove your own admin status');
-        }
-
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
-            'is_admin' => 'boolean',
+            'roles' => 'nullable|array',
+            'roles.*' => 'exists:roles,name',
         ]);
 
+        $selectedRoles = $validated['roles'] ?? [];
+        $isAdmin = in_array('admin', $selectedRoles, true);
+
+        if ($user->id === Auth::id() && !$isAdmin) {
+            return back()->with('error', 'You cannot remove your own admin role');
+        }
+
+        $validated['is_admin'] = $isAdmin;
+
         $user->update($validated);
+        $user->syncRoles($selectedRoles);
 
         return back()->with('success', 'User updated successfully');
     }

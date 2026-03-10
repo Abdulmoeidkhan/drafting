@@ -72,6 +72,13 @@
                                 <div class="user-header-content">
                                     <h5>{{ $user->name }}</h5>
                                     <p>{{ $user->email }}</p>
+                                    <div>
+                                        @forelse($user->getRoleNames() as $roleName)
+                                            <span class="badge text-bg-secondary me-1">{{ ucfirst($roleName) }}</span>
+                                        @empty
+                                            <span class="badge text-bg-light">No role</span>
+                                        @endforelse
+                                    </div>
                                 </div>
                                 @if($user->is_admin)
                                     <div class="admin-badge">
@@ -96,7 +103,16 @@
                             </div>
 
                             <div class="user-actions">
-                                <button class="action-btn-small edit" data-bs-toggle="modal" data-bs-target="#editUserModal" onclick="editUser({{ $user->id }}, '{{ $user->name }}', '{{ $user->email }}', {{ $user->is_admin ? 'true' : 'false' }})">
+                                <button
+                                    class="action-btn-small edit"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editUserModal"
+                                    data-id="{{ $user->id }}"
+                                    data-name="{{ $user->name }}"
+                                    data-email="{{ $user->email }}"
+                                    data-roles='@json($user->getRoleNames()->values())'
+                                    onclick="editUser(this)"
+                                >
                                     <i class="bi bi-pencil"></i> Edit
                                 </button>
                                 @if(auth()->user()->id !== $user->id)
@@ -149,11 +165,16 @@
                             <label for="password_confirmation" class="form-label">Confirm Password</label>
                             <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" value="1">
-                            <label class="form-check-label" for="is_admin">
-                                Make this user an administrator
-                            </label>
+                        <div class="mb-3">
+                            <label class="form-label">Assign Roles</label>
+                            @foreach($roles as $role)
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="create_role_{{ $role }}" name="roles[]" value="{{ $role }}">
+                                    <label class="form-check-label" for="create_role_{{ $role }}">
+                                        {{ ucfirst($role) }}
+                                    </label>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -185,11 +206,16 @@
                             <label for="edit_email" class="form-label">Email Address</label>
                             <input type="email" class="form-control" id="edit_email" name="email" required>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="edit_is_admin" name="is_admin" value="1">
-                            <label class="form-check-label" for="edit_is_admin">
-                                Make this user an administrator
-                            </label>
+                        <div class="mb-3">
+                            <label class="form-label">Assign Roles</label>
+                            @foreach($roles as $role)
+                                <div class="form-check">
+                                    <input class="form-check-input edit-role-checkbox" type="checkbox" id="edit_role_{{ $role }}" name="roles[]" value="{{ $role }}">
+                                    <label class="form-check-label" for="edit_role_{{ $role }}">
+                                        {{ ucfirst($role) }}
+                                    </label>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -203,11 +229,19 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function editUser(id, name, email, isAdmin) {
+        function editUser(button) {
+            const id = button.dataset.id;
+            const name = button.dataset.name;
+            const email = button.dataset.email;
+            const roles = JSON.parse(button.dataset.roles || '[]');
+
             document.getElementById('edit_name').value = name;
             document.getElementById('edit_email').value = email;
-            document.getElementById('edit_is_admin').checked = isAdmin;
             document.getElementById('editForm').action = '/admin/users/' + id;
+
+            document.querySelectorAll('.edit-role-checkbox').forEach((checkbox) => {
+                checkbox.checked = roles.includes(checkbox.value);
+            });
         }
     </script>
 </body>

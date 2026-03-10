@@ -14,14 +14,14 @@ Route::get('/status/{id}', [ParticipantFormController::class, 'getStatus'])->nam
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.post');
-    Route::get('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin');
-    Route::post('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin.post');
+    // Route::get('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin');
+    // Route::post('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin.post');
 });
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Admin routes
-Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     
     // Participants management
