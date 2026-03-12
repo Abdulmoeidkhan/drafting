@@ -3,7 +3,9 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\ParticipantFormController;
+use App\Http\Controllers\TeamController;
 
 // Public routes
 Route::get('/', [ParticipantFormController::class, 'index'])->name('form.index');
@@ -11,14 +13,21 @@ Route::post('/submit-form', [ParticipantFormController::class, 'submit'])->name(
 Route::get('/status/{id}', [ParticipantFormController::class, 'getStatus'])->name('form.status');
 
 // Authentication routes
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+
 Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.post');
     // Route::get('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin');
     // Route::post('/setup-admin', [AuthController::class, 'createFirstAdmin'])->name('setup.admin.post');
 });
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+
+// Team and player self-service routes
+Route::middleware('auth')->group(function () {
+    Route::get('/team/dashboard', [TeamController::class, 'teamDashboard'])->name('team.dashboard');
+    Route::get('/player/profile', [PlayerController::class, 'profile'])->name('player.profile');
+});
 
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -39,7 +48,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Categories management
     Route::get('/categories', [AdminController::class, 'categories'])->name('categories');
     Route::post('/categories', [AdminController::class, 'createCategory'])->name('category.create');
+    Route::patch('/categories/{id}', [AdminController::class, 'updateCategory'])->name('category.update');
     Route::delete('/categories/{id}', [AdminController::class, 'deleteCategory'])->name('category.delete');
+
+    // Teams and draft management
+    Route::get('/teams', [TeamController::class, 'index'])->name('teams');
+    Route::post('/teams', [TeamController::class, 'store'])->name('team.create');
+    Route::patch('/teams/{team}', [TeamController::class, 'update'])->name('team.update');
+    Route::delete('/teams/{team}', [TeamController::class, 'destroy'])->name('team.delete');
+    Route::post('/teams/{team}/draft/{participant}', [TeamController::class, 'draftPlayer'])->name('team.draft');
+    Route::delete('/teams/{team}/draft/{participant}', [TeamController::class, 'releasePlayer'])->name('team.release');
+    Route::post('/draft/rounds', [TeamController::class, 'startRound'])->name('draft.round.start');
+    Route::post('/draft/rounds/{round}/pick/{participant}', [TeamController::class, 'pickInRound'])->name('draft.round.pick');
+    Route::post('/draft/rounds/{round}/tick', [TeamController::class, 'tickRound'])->name('draft.round.tick');
+    Route::post('/draft/rounds/{round}/close', [TeamController::class, 'closeRound'])->name('draft.round.close');
     
     // Users management
     Route::get('/users', [AdminController::class, 'users'])->name('users');

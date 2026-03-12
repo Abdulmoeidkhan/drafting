@@ -31,6 +31,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/teams">
+                            <i class="bi bi-shield"></i> Teams
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/admin/users">
                             <i class="bi bi-person-gear"></i> Users
                         </a>
@@ -80,11 +85,15 @@
                     @method('PATCH')
 
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" class="form-control" name="full_name" value="{{ $participant->full_name }}" required>
+                        <div class="col-md-4">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name" value="{{ $participant->first_name }}" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name" value="{{ $participant->last_name }}" required>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Nick Name</label>
                             <input type="text" class="form-control" name="nick_name" value="{{ $participant->nick_name }}" required>
                         </div>

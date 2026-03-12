@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Participant;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -15,12 +18,6 @@ class AuthController extends Controller
      */
     public function showLogin()
     {
-        if (Auth::check()) {
-            /** @var User $user */
-            $user = Auth::user();
-
-            return redirect()->route($user->isAdmin() ? 'admin.dashboard' : 'form.index');
-        }
         return view('auth.login');
     }
 
@@ -39,9 +36,18 @@ class AuthController extends Controller
 
             /** @var User $user */
             $user = Auth::user();
+
+            $homeRoute = $this->resolveHomeRoute($user);
+            $intendedUrl = (string) $request->session()->get('url.intended', '');
+
+            // Never send non-admin users to admin area from stale intended URLs.
+            if (!$user->isAdmin() && Str::contains($intendedUrl, '/admin')) {
+                $request->session()->forget('url.intended');
+                return redirect()->route($homeRoute);
+            }
             
             return redirect()->intended(
-                $user->isAdmin() ? route('admin.dashboard') : route('form.index')
+                route($homeRoute)
             );
         }
 
@@ -99,6 +105,34 @@ class AuthController extends Controller
         ]);
 
         return response()->json($user, 201);
+    }
+
+    /**
+     * Resolve home route by role.
+     */
+    private function resolveHomeRoute(User $user): string
+    {
+        if ($user->isAdmin()) {
+            return 'admin.dashboard';
+        }
+
+        if ($user->hasRole('team')) {
+            return 'team.dashboard';
+        }
+
+        if (Team::query()->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])->exists()) {
+            return 'team.dashboard';
+        }
+
+        if ($user->hasRole('player')) {
+            return 'player.profile';
+        }
+
+        if (Participant::query()->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])->exists()) {
+            return 'player.profile';
+        }
+
+        return 'form.index';
     }
 
     // /**

@@ -31,6 +31,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/teams">
+                            <i class="bi bi-shield"></i> Teams
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/admin/users">
                             <i class="bi bi-person-gear"></i> Users
                         </a>
@@ -50,6 +55,26 @@
 
     <!-- Main Content -->
     <div class="container-fluid main-container">
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
+        @if(session('account_credentials'))
+            @php
+                $credentials = session('account_credentials');
+            @endphp
+            <div class="alert alert-warning">
+                <strong>{{ $credentials['label'] ?? 'New Account' }} Credentials:</strong>
+                <div>Email: <code>{{ $credentials['email'] ?? '' }}</code></div>
+                <div>Password: <code>{{ $credentials['password'] ?? '' }}</code></div>
+                <small class="text-muted">Share these once and ask user to change password after first login.</small>
+            </div>
+        @endif
+
         <!-- Page Header -->
         <div class="page-header">
             <h1><i class="bi bi-people"></i> Participants Management</h1>

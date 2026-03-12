@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Participant;
 use App\Models\User;
 use App\Models\Category;
+use App\Models\Team;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -24,6 +26,8 @@ class AdminController extends Controller
             'approved' => Participant::where('status', 'approved')->count(),
             'rejected' => Participant::where('status', 'rejected')->count(),
             'total_users' => User::count(),
+            'total_teams' => Team::count(),
+            'drafted_players' => Participant::whereNotNull('team_id')->count(),
         ];
 
         return view('admin.dashboard', $stats);
@@ -38,9 +42,12 @@ class AdminController extends Controller
 
         if ($request->has('search')) {
             $search = $request->search;
-            $query->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('city', 'like', "%{$search}%");
+            $query->where(function ($subQuery) use ($search) {
+                $subQuery->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('city', 'like', "%{$search}%");
+            });
         }
 
         if ($request->has('status')) {
@@ -69,7 +76,23 @@ class AdminController extends Controller
         $participant = Participant::findOrFail($id);
         $participant->update(['status' => 'approved']);
 
-        return back()->with('success', 'Participant approved successfully');
+        $accountResult = $this->ensureParticipantUserAccount($participant);
+
+        if (!empty($accountResult['blocked'])) {
+            return back()->with('success', 'Participant approved, but no player login was created because this email belongs to an admin account.');
+        }
+
+        if ($accountResult['created']) {
+            return back()
+                ->with('success', 'Participant approved and player login created successfully.')
+                ->with('account_credentials', [
+                    'label' => 'Player Account',
+                    'email' => $accountResult['email'],
+                    'password' => $accountResult['password'],
+                ]);
+        }
+
+        return back()->with('success', 'Participant approved successfully. Existing user was linked with player access.');
     }
 
     /**
@@ -202,7 +225,7 @@ class AdminController extends Controller
             
             // Headers
             fputcsv($file, [
-                'ID', 'Full Name', 'Email', 'Mobile', 'City', 'Nationality',
+                'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 'City', 'Nationality',
                 'Kit Size', 'Status', 'Created At'
             ]);
             
@@ -210,7 +233,8 @@ class AdminController extends Controller
             foreach ($participants as $p) {
                 fputcsv($file, [
                     $p->id,
-                    $p->full_name,
+                    $p->first_name,
+                    $p->last_name,
                     $p->email,
                     $p->mobile,
                     $p->city,
@@ -245,7 +269,8 @@ class AdminController extends Controller
         $participant = Participant::findOrFail($id);
 
         $validated = $request->validate([
-            'full_name' => 'required|string|max:255',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
             'nick_name' => 'required|string|max:255',
             'city' => 'required|string|max:255',
             'address' => 'required|string',
@@ -274,8 +299,7 @@ class AdminController extends Controller
      */
     public function categories()
     {
-        $categories = Category::withCount('participants')->paginate(15);
-        return view('admin.categories', ['categories' => $categories]);
+        return redirect()->route('admin.teams', ['tab' => 'categories']);
     }
 
     /**
@@ -293,13 +317,30 @@ class AdminController extends Controller
     }
 
     /**
+     * Update category
+     */
+    public function updateCategory(Request $request, $id)
+    {
+        $category = Category::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $id,
+            'description' => 'nullable|string',
+        ]);
+
+        $category->update($validated);
+
+        return back()->with('success', 'Category updated successfully');
+    }
+
+    /**
      * Delete category
      */
     public function deleteCategory($id)
     {
         $category = Category::findOrFail($id);
         $category->delete();
-        return back()->with('success', 'Category deleted successfully');
+        return back()->with('success', 'Category deleted successfully. Linked players are now uncategorized.');
     }
 
     /**
@@ -368,6 +409,59 @@ class AdminController extends Controller
         }
 
         return Storage::disk('public')->response($filePath);
+    }
+
+    /**
+     * Ensure a player-role user exists for approved participant email.
+     */
+    private function ensureParticipantUserAccount(Participant $participant): array
+    {
+        $email = (string) $participant->email;
+        $displayName = trim($participant->first_name . ' ' . $participant->last_name);
+        $displayName = $displayName !== '' ? $displayName : ($participant->nick_name ?: 'Player');
+
+        $user = User::query()->where('email', $email)->first();
+
+        if ($user && $user->isAdmin()) {
+            return [
+                'blocked' => true,
+                'created' => false,
+                'email' => $email,
+                'password' => null,
+            ];
+        }
+
+        if ($user) {
+            $user->update([
+                'name' => $displayName,
+                'created_by_admin' => true,
+            ]);
+            $user->syncRoles(['player']);
+
+            return [
+                'created' => false,
+                'email' => $user->email,
+                'password' => null,
+            ];
+        }
+
+        $plainPassword = 'Player@' . Str::upper(Str::random(8)) . random_int(10, 99);
+
+        $user = User::create([
+            'name' => $displayName,
+            'email' => $email,
+            'password' => $plainPassword,
+            'is_admin' => false,
+            'created_by_admin' => true,
+        ]);
+
+        $user->syncRoles(['player']);
+
+        return [
+            'created' => true,
+            'email' => $user->email,
+            'password' => $plainPassword,
+        ];
     }
 
 }

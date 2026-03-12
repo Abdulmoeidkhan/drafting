@@ -31,6 +31,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/teams">
+                            <i class="bi bi-shield"></i> Teams
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/admin/users">
                             <i class="bi bi-person-gear"></i> Users
                         </a>
@@ -120,6 +125,16 @@
                 </div>
             </div>
 
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="stat-card users">
+                    <div class="stat-icon" style="color: #0ea5e9;">
+                        <i class="bi bi-shield"></i>
+                    </div>
+                    <div class="stat-number">{{ $total_teams }}</div>
+                    <div class="stat-label">Total Teams</div>
+                </div>
+            </div>
+
             <!-- Approval Rate -->
             <div class="col-md-6 col-lg-3 mb-3">
                 <div class="stat-card primary">
@@ -150,6 +165,9 @@
                     </a>
                     <a href="/admin/users" class="action-btn success">
                         <i class="bi bi-person-plus"></i> Manage Users
+                    </a>
+                    <a href="/admin/teams" class="action-btn primary">
+                        <i class="bi bi-trophy"></i> Team Module
                     </a>
                     <a href="/admin/export" class="action-btn secondary">
                         <i class="bi bi-download"></i> Export CSV

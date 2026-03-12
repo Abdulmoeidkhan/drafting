@@ -31,6 +31,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/teams">
+                            <i class="bi bi-shield"></i> Teams
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link active" href="/admin/users">
                             <i class="bi bi-person-gear"></i> Users
                         </a>

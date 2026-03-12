@@ -39,6 +39,8 @@ class Participant extends Model
         'created_by',
         'status',
         'category_id',
+        'team_id',
+        'drafted_at',
     ];
 
     protected $casts = [
@@ -49,6 +51,7 @@ class Participant extends Model
         'skill_categories' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'drafted_at' => 'datetime',
     ];
 
     // Encrypted attributes
@@ -98,5 +101,21 @@ class Participant extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * Get the team that drafted this participant
+     */
+    public function team()
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Computed full name used by existing views/controllers.
+     */
+    public function getFullNameAttribute(): string
+    {
+        return trim((string) $this->first_name . ' ' . (string) $this->last_name);
     }
 }
