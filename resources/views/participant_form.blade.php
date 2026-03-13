@@ -9,10 +9,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('assets/css/participant-form.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 
 <body>
-    <nav class="navbar navbar-dark" style="background:linear-gradient(135deg,var(--primary),var(--secondary));">
+    <nav class="navbar navbar-dark app-navbar">
         <div class="container-fluid"><a class="navbar-brand" href="/">Participant Registration</a></div>
     </nav>
 

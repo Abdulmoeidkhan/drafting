@@ -52,9 +52,189 @@ class TeamController extends Controller
             abort(404, 'No team is linked to this account email.');
         }
 
+        $activeRound = DraftRound::query()
+            ->with(['category', 'currentTeam'])
+            ->where('status', 'active')
+            ->latest('id')
+            ->first();
+
+        $eligibleCategoryIds = $activeRound ? $this->getEligibleCategoryIds($activeRound) : [];
+
+        $draftPoolParticipants = collect();
+        $teamRoundPicksCount = 0;
+        $remainingTurnSeconds = 0;
+
+        if ($activeRound) {
+            $draftPoolParticipants = Participant::query()
+                ->with('category')
+                ->where('status', 'approved')
+                ->whereNull('team_id')
+                ->whereIn('category_id', $eligibleCategoryIds)
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get();
+
+            $teamRoundPicksCount = DraftPick::query()
+                ->where('draft_round_id', $activeRound->id)
+                ->where('team_id', $team->id)
+                ->count();
+
+            if ($activeRound->current_turn_started_at) {
+                $elapsed = Carbon::now()->diffInSeconds($activeRound->current_turn_started_at);
+                $remainingTurnSeconds = max(0, (int) $activeRound->turn_time_seconds - $elapsed);
+            }
+        }
+
+        $isTeamTurn = $activeRound && (int) $activeRound->current_team_id === (int) $team->id;
+        $canPick = $activeRound
+            && $isTeamTurn
+            && $team->participants->count() < (int) $team->max_players
+            && $teamRoundPicksCount < (int) $activeRound->picks_per_team;
+
+        $draftActivity = DraftPick::query()
+            ->with(['team', 'participant.category', 'round.category'])
+            ->orderByDesc('picked_at')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
         return view('team.dashboard', [
             'team' => $team,
             'participants' => $team->participants,
+            'activeRound' => $activeRound,
+            'draftPoolParticipants' => $draftPoolParticipants,
+            'teamRoundPicksCount' => $teamRoundPicksCount,
+            'isTeamTurn' => (bool) $isTeamTurn,
+            'canPick' => (bool) $canPick,
+            'remainingTurnSeconds' => $remainingTurnSeconds,
+            'draftActivity' => $draftActivity,
+        ]);
+    }
+
+    /**
+     * Full draft activity module for authenticated users.
+     */
+    public function activities(Request $request)
+    {
+        $filters = $request->validate([
+            'team_id' => 'nullable|integer|exists:teams,id',
+            'round_id' => 'nullable|integer|exists:draft_rounds,id',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date',
+            'search' => 'nullable|string|max:100',
+            'export' => 'nullable|string|in:csv',
+        ]);
+
+        $activityQuery = DraftPick::query()
+            ->with(['team', 'participant.category', 'round.category']);
+
+        if (!empty($filters['team_id'])) {
+            $activityQuery->where('team_id', (int) $filters['team_id']);
+        }
+
+        if (!empty($filters['round_id'])) {
+            $activityQuery->where('draft_round_id', (int) $filters['round_id']);
+        }
+
+        if (!empty($filters['category_id'])) {
+            $activityQuery->whereHas('round', function ($query) use ($filters) {
+                $query->where('category_id', (int) $filters['category_id']);
+            });
+        }
+
+        if (!empty($filters['from'])) {
+            $activityQuery->whereDate('picked_at', '>=', $filters['from']);
+        }
+
+        if (!empty($filters['to'])) {
+            $activityQuery->whereDate('picked_at', '<=', $filters['to']);
+        }
+
+        if (!empty($filters['search'])) {
+            $search = trim((string) $filters['search']);
+
+            $activityQuery->where(function ($query) use ($search) {
+                $query->whereHas('participant', function ($participantQuery) use ($search) {
+                    $participantQuery
+                        ->where('first_name', 'like', '%' . $search . '%')
+                        ->orWhere('last_name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
+                })->orWhereHas('team', function ($teamQuery) use ($search) {
+                    $teamQuery->where('name', 'like', '%' . $search . '%');
+                });
+            });
+        }
+
+        if (($filters['export'] ?? null) === 'csv') {
+            $rows = $activityQuery
+                ->orderByDesc('picked_at')
+                ->orderByDesc('id')
+                ->get();
+
+            $fileName = 'draft-activities-' . now()->format('Ymd-His') . '.csv';
+
+            return response()->streamDownload(function () use ($rows) {
+                $stream = fopen('php://output', 'w');
+
+                fputcsv($stream, [
+                    'picked_at',
+                    'round_id',
+                    'pick_number',
+                    'team',
+                    'player_name',
+                    'player_email',
+                    'category',
+                ]);
+
+                foreach ($rows as $row) {
+                    fputcsv($stream, [
+                        optional($row->picked_at)->format('Y-m-d H:i:s') ?: '',
+                        $row->draft_round_id,
+                        $row->pick_number,
+                        $row->team?->name ?: '',
+                        $row->participant?->full_name ?: '',
+                        $row->participant?->email ?: '',
+                        $row->round?->category?->name ?: ($row->participant?->category?->name ?: 'Uncategorized'),
+                    ]);
+                }
+
+                fclose($stream);
+            }, $fileName, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ]);
+        }
+
+        $activities = $activityQuery
+            ->orderByDesc('picked_at')
+            ->orderByDesc('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        $teams = Team::query()->orderBy('name')->get(['id', 'name']);
+
+        $rounds = DraftRound::query()
+            ->with('category:id,name')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get(['id', 'category_id', 'status']);
+
+        $categories = Category::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('activities.index', [
+            'activities' => $activities,
+            'teams' => $teams,
+            'rounds' => $rounds,
+            'categories' => $categories,
+            'filters' => [
+                'team_id' => $filters['team_id'] ?? '',
+                'round_id' => $filters['round_id'] ?? '',
+                'category_id' => $filters['category_id'] ?? '',
+                'from' => $filters['from'] ?? '',
+                'to' => $filters['to'] ?? '',
+                'search' => $filters['search'] ?? '',
+                'export' => '',
+            ],
         ]);
     }
 
@@ -200,7 +380,18 @@ class TeamController extends Controller
      */
     public function pickInRound(Request $request, DraftRound $round, Participant $participant)
     {
-        $result = DB::transaction(function () use ($round, $participant) {
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        if (!$user) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $linkedTeamId = Team::query()
+            ->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])
+            ->value('id');
+
+        $result = DB::transaction(function () use ($round, $participant, $user, $linkedTeamId) {
             $lockedRound = DraftRound::query()->lockForUpdate()->findOrFail($round->id);
 
             if ($lockedRound->status !== 'active') {
@@ -229,6 +420,10 @@ class TeamController extends Controller
             }
 
             $currentTeam = Team::query()->lockForUpdate()->findOrFail($lockedRound->current_team_id);
+
+            if (!$user->isAdmin() && (int) $linkedTeamId !== (int) $currentTeam->id) {
+                return ['error' => 'It is not your team turn to pick right now.'];
+            }
 
             if ($currentTeam->participants()->count() >= $currentTeam->max_players) {
                 return ['error' => 'Current team roster is full. Update max players or close this round.'];

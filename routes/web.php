@@ -26,6 +26,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middl
 // Team and player self-service routes
 Route::middleware('auth')->group(function () {
     Route::get('/team/dashboard', [TeamController::class, 'teamDashboard'])->name('team.dashboard');
+    Route::post('/team/draft/rounds/{round}/pick/{participant}', [TeamController::class, 'pickInRound'])->name('team.draft.round.pick');
+    Route::get('/activities', [TeamController::class, 'activities'])->name('activities.index');
     Route::get('/player/profile', [PlayerController::class, 'profile'])->name('player.profile');
 });
 

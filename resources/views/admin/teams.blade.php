@@ -8,9 +8,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('assets/css/admin-teams.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top app-navbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="/admin/dashboard">
                 <i class="bi bi-diagram-3"></i> Admin Panel
@@ -31,6 +32,9 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/users"><i class="bi bi-person-gear"></i> Users</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('activities.index') }}"><i class="bi bi-activity"></i> Activities</a>
                     </li>
                     <li class="nav-item">
                         <form method="POST" action="/logout" style="display: inline;">
@@ -386,6 +390,7 @@
                                             <table class="table align-middle">
                                                 <thead>
                                                     <tr>
+                                                        <th>Photo</th>
                                                         <th>Player</th>
                                                         <th>Email</th>
                                                         <th>City</th>
@@ -395,6 +400,18 @@
                                                 <tbody>
                                                     @forelse($category->participants as $participant)
                                                         <tr>
+                                                            <td>
+                                                                @if($participant->passport_picture)
+                                                                    <img
+                                                                        src="{{ asset('storage/' . ltrim($participant->passport_picture, '/')) }}"
+                                                                        alt="{{ $participant->full_name }}"
+                                                                        class="rounded"
+                                                                        style="width: 44px; height: 44px; object-fit: cover;"
+                                                                    >
+                                                                @else
+                                                                    <span class="badge text-bg-secondary">No Photo</span>
+                                                                @endif
+                                                            </td>
                                                             <td>{{ $participant->full_name }}</td>
                                                             <td>{{ $participant->email }}</td>
                                                             <td>{{ $participant->city }}</td>
@@ -442,7 +459,7 @@
                                                         </tr>
                                                     @empty
                                                         <tr>
-                                                            <td colspan="4" class="text-center text-muted py-4">No available players in this category round.</td>
+                                                            <td colspan="5" class="text-center text-muted py-4">No available players in this category round.</td>
                                                         </tr>
                                                     @endforelse
                                                 </tbody>
@@ -463,6 +480,7 @@
                                         <table class="table align-middle">
                                             <thead>
                                                 <tr>
+                                                    <th>Photo</th>
                                                     <th>Player</th>
                                                     <th>Email</th>
                                                     <th>City</th>
@@ -472,6 +490,18 @@
                                             <tbody>
                                                 @forelse($uncategorizedDraftableParticipants as $participant)
                                                     <tr>
+                                                        <td>
+                                                            @if($participant->passport_picture)
+                                                                <img
+                                                                    src="{{ asset('storage/' . ltrim($participant->passport_picture, '/')) }}"
+                                                                    alt="{{ $participant->full_name }}"
+                                                                    class="rounded"
+                                                                    style="width: 44px; height: 44px; object-fit: cover;"
+                                                                >
+                                                            @else
+                                                                <span class="badge text-bg-secondary">No Photo</span>
+                                                            @endif
+                                                        </td>
                                                         <td>{{ $participant->full_name }}</td>
                                                         <td>{{ $participant->email }}</td>
                                                         <td>{{ $participant->city }}</td>
@@ -503,7 +533,7 @@
                                                     </tr>
                                                 @empty
                                                     <tr>
-                                                        <td colspan="4" class="text-center text-muted py-4">No uncategorized players available.</td>
+                                                        <td colspan="5" class="text-center text-muted py-4">No uncategorized players available.</td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>

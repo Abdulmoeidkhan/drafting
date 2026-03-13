@@ -209,9 +209,25 @@ class AdminController extends Controller
     /**
      * Export participants (CSV)
      */
-    public function exportParticipants()
+    public function exportParticipants(Request $request)
     {
-        $participants = Participant::all();
+        $query = Participant::query();
+
+        if ($request->filled('search')) {
+            $search = (string) $request->search;
+            $query->where(function ($subQuery) use ($search) {
+                $subQuery->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('city', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->status);
+        }
+
+        $participants = $query->orderByDesc('id')->get();
         
         $filename = 'participants_' . date('Y-m-d_H-i-s') . '.csv';
         
@@ -226,7 +242,7 @@ class AdminController extends Controller
             // Headers
             fputcsv($file, [
                 'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 'City', 'Nationality',
-                'Kit Size', 'Status', 'Created At'
+                'Kit Size', 'Status', 'Passport Photo URL', 'Created At'
             ]);
             
             // Data
@@ -241,6 +257,7 @@ class AdminController extends Controller
                     $p->nationality,
                     $p->kit_size,
                     $p->status,
+                    $p->passport_picture ? asset('storage/' . ltrim((string) $p->passport_picture, '/')) : '',
                     $p->created_at->format('Y-m-d H:i:s'),
                 ]);
             }
