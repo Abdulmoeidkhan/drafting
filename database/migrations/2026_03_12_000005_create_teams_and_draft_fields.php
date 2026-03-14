@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('name')->unique();
             $table->string('short_code', 10)->nullable()->unique();
             $table->string('captain_name')->nullable();
-            $table->string('email')->unique()->after('captain_name');
+            $table->string('email')->unique();
             $table->unsignedTinyInteger('max_players')->default(11);
-            $table->string('logo')->nullable()->after('max_players');
+            $table->string('logo')->nullable();
             $table->timestamps();
         });
 

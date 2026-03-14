@@ -48,7 +48,7 @@ return new class extends Migration
             $table->string('flight_reservation')->nullable();
             $table->date('checkin')->nullable();
             $table->date('checkout')->nullable();
-            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending')->after('checkout');
+            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             
             $table->timestamps();
         });
