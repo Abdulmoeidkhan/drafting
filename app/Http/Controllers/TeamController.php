@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\DraftPick;
 use App\Models\DraftRound;
+use App\Models\LeagueRoundConfig;
 use App\Models\Participant;
 use App\Models\Team;
 use App\Models\User;
@@ -302,6 +303,12 @@ class TeamController extends Controller
             ->orderByDesc('drafted_at')
             ->get();
 
+        $leagueRoundConfigs = LeagueRoundConfig::query()->orderBy('round_number')->get();
+        $completedRoundsCount = DraftRound::query()->where('status', 'completed')->count();
+        $nextLeagueRoundNumber = $completedRoundsCount + ($activeRound ? 1 : 0) + 1;
+        $nextLeagueRoundConfig = $leagueRoundConfigs->firstWhere('round_number', $nextLeagueRoundNumber);
+        $teamsById = $teams->keyBy('id');
+
         return view('admin.teams', [
             'teams' => $teams,
             'categories' => $categories,
@@ -311,6 +318,11 @@ class TeamController extends Controller
             'activeRoundEligibleCategoryIds' => $activeRoundEligibleCategoryIds,
             'activeRoundTeamPickCounts' => $activeRoundTeamPickCounts,
             'activeRoundRemainingSeconds' => $activeRoundRemainingSeconds,
+            'leagueRoundConfigs' => $leagueRoundConfigs,
+            'completedRoundsCount' => $completedRoundsCount,
+            'nextLeagueRoundNumber' => $nextLeagueRoundNumber,
+            'nextLeagueRoundConfig' => $nextLeagueRoundConfig,
+            'teamsById' => $teamsById,
             'activeTab' => $request->query('tab', 'teams'),
             'activeDraftCategory' => (string) $request->query('category', ($categories->first()?->id ? (string) $categories->first()->id : 'uncategorized')),
         ]);
@@ -849,5 +861,97 @@ class TeamController extends Controller
         ]);
 
         return true;
+    }
+
+    // -----------------------------------------------------------------------
+    // League Setup
+    // -----------------------------------------------------------------------
+
+    /**
+     * Save the full league round plan.
+     * Round 1 order is set by the admin; subsequent rounds are auto-generated
+     * using a rotation: whoever picked first in round N picks last in round N+1,
+     * and the 2nd team in round N becomes the new first picker.
+     */
+    public function saveLeagueSetup(Request $request)
+    {
+        $teamIds = Team::query()->orderBy('name')->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if (count($teamIds) === 0) {
+            return back()->with('error', 'Create at least one team before setting up league rounds.');
+        }
+
+        $validated = $request->validate([
+            'total_rounds'          => 'required|integer|min:1|max:99',
+            'round1_first_team_id'  => 'required|exists:teams,id',
+        ]);
+
+        $totalRounds  = (int) $validated['total_rounds'];
+        $firstTeamId  = (int) $validated['round1_first_team_id'];
+        $round1Order  = $this->buildPickOrder($teamIds, $firstTeamId);
+
+        DB::transaction(function () use ($totalRounds, $round1Order) {
+            LeagueRoundConfig::query()->delete();
+
+            $currentOrder = $round1Order;
+
+            for ($roundNum = 1; $roundNum <= $totalRounds; $roundNum++) {
+                LeagueRoundConfig::create([
+                    'round_number'    => $roundNum,
+                    'team_pick_order' => $currentOrder,
+                    'is_manually_set' => $roundNum === 1,
+                ]);
+
+                // Rotation: first team goes to the end, everyone shifts up one.
+                $currentOrder = array_merge(
+                    array_slice($currentOrder, 1),
+                    [$currentOrder[0]]
+                );
+            }
+        });
+
+        return redirect()
+            ->route('admin.teams', ['tab' => 'league-setup'])
+            ->with('success', "League setup saved: {$totalRounds} rounds configured.");
+    }
+
+    /**
+     * Manually override the pick order for a single round.
+     * Only the first-pick team changes; the rest keeps their relative order
+     * from the existing saved order, rotated to put the chosen team first.
+     */
+    public function updateLeagueRound(Request $request, int $roundNumber)
+    {
+        $validated = $request->validate([
+            'first_team_id' => 'required|exists:teams,id',
+        ]);
+
+        $firstTeamId = (int) $validated['first_team_id'];
+
+        $config = LeagueRoundConfig::query()->where('round_number', $roundNumber)->firstOrFail();
+
+        $existingOrder = collect($config->team_pick_order)->map(fn ($id) => (int) $id)->all();
+        $newOrder = $this->buildPickOrder($existingOrder, $firstTeamId);
+
+        $config->update([
+            'team_pick_order' => $newOrder,
+            'is_manually_set' => true,
+        ]);
+
+        return redirect()
+            ->route('admin.teams', ['tab' => 'league-setup'])
+            ->with('success', "Round {$roundNumber} first-pick team updated.");
+    }
+
+    /**
+     * Wipe the entire league round plan.
+     */
+    public function clearLeagueSetup()
+    {
+        LeagueRoundConfig::query()->delete();
+
+        return redirect()
+            ->route('admin.teams', ['tab' => 'league-setup'])
+            ->with('success', 'League setup cleared.');
     }
 }

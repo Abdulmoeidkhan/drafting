@@ -64,6 +64,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/draft/rounds/{round}/pick/{participant}', [TeamController::class, 'pickInRound'])->name('draft.round.pick');
     Route::post('/draft/rounds/{round}/tick', [TeamController::class, 'tickRound'])->name('draft.round.tick');
     Route::post('/draft/rounds/{round}/close', [TeamController::class, 'closeRound'])->name('draft.round.close');
+
+    // League setup
+    Route::post('/league-setup', [TeamController::class, 'saveLeagueSetup'])->name('league.setup.save');
+    Route::patch('/league-setup/{roundNumber}', [TeamController::class, 'updateLeagueRound'])->name('league.round.update');
+    Route::delete('/league-setup', [TeamController::class, 'clearLeagueSetup'])->name('league.setup.clear');
     
     // Users management
     Route::get('/users', [AdminController::class, 'users'])->name('users');

@@ -109,6 +109,14 @@
                             <i class="bi bi-tags"></i> Categories
                         </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="league-setup-tab" data-bs-toggle="tab" data-bs-target="#league-setup-tab-pane" type="button" role="tab">
+                            <i class="bi bi-calendar3"></i> League Setup
+                            @if($leagueRoundConfigs->isNotEmpty())
+                                <span class="badge text-bg-primary ms-1">{{ $leagueRoundConfigs->count() }}</span>
+                            @endif
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content pt-4" id="teamTabsContent">
@@ -274,13 +282,21 @@
                                                 <div class="form-text">Optional. Example: In Gold round, also allow Platinum.</div>
                                             </div>
                                             <div class="col-lg-2">
-                                                <label class="form-label">Starting Team</label>
+                                                <label class="form-label">Starting Team
+                                                    @if($nextLeagueRoundConfig)
+                                                        <span class="badge text-bg-info ms-1">Round {{ $nextLeagueRoundNumber }} planned</span>
+                                                    @endif
+                                                </label>
                                                 <select name="starting_team_id" class="form-select" required>
                                                     <option value="">Select team</option>
                                                     @foreach($teams as $team)
-                                                        <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                                        @php $plannedFirstId = $nextLeagueRoundConfig ? (int)($nextLeagueRoundConfig->team_pick_order[0] ?? 0) : 0; @endphp
+                                                        <option value="{{ $team->id }}" @if($plannedFirstId === (int)$team->id) selected @endif>{{ $team->name }}</option>
                                                     @endforeach
                                                 </select>
+                                                @if($nextLeagueRoundConfig)
+                                                    <div class="form-text text-info"><i class="bi bi-calendar3"></i> Pre-selected from league plan for Round {{ $nextLeagueRoundNumber }}.</div>
+                                                @endif
                                             </div>
                                             <div class="col-lg-2">
                                                 <label class="form-label">Picks / Team</label>
@@ -667,7 +683,193 @@
                             </div>
                         </div>
                     </div>
+
+                    {{-- League Setup Tab --}}
+                    <div class="tab-pane fade" id="league-setup-tab-pane" role="tabpanel" tabindex="0">
+                        <div class="sub-card">
+                            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
+                                <div>
+                                    <h4 class="mb-1"><i class="bi bi-calendar3"></i> League Round Setup</h4>
+                                    <p class="text-muted small mb-0">Pre-plan all draft rounds. Whoever picks first in a round rotates to last next round &mdash; the 2nd team becomes the new first pick.</p>
+                                </div>
+                                @if($leagueRoundConfigs->isNotEmpty())
+                                    <form method="POST" action="{{ route('admin.league.setup.clear') }}" onsubmit="return confirm('Clear the entire league round plan?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i> Clear All Rounds</button>
+                                    </form>
+                                @endif
+                            </div>
+
+                            @if($teams->count() === 0)
+                                <div class="alert alert-warning mb-0">
+                                    <i class="bi bi-exclamation-triangle"></i> Create at least one team before setting up league rounds.
+                                </div>
+                            @else
+                                <div class="round-setup-card mb-4">
+                                    <h5 class="mb-3">
+                                        <i class="bi bi-gear"></i>
+                                        {{ $leagueRoundConfigs->isEmpty() ? 'Configure League Rounds' : 'Reconfigure League (replaces current plan)' }}
+                                    </h5>
+                                    <form method="POST" action="{{ route('admin.league.setup.save') }}">
+                                        @csrf
+                                        <div class="row g-3 align-items-end">
+                                            <div class="col-lg-3">
+                                                <label class="form-label">Total Rounds</label>
+                                                <input type="number" class="form-control" name="total_rounds" min="1" max="99"
+                                                    value="{{ $leagueRoundConfigs->count() ?: 6 }}" required>
+                                                <div class="form-text">Number of draft rounds in this league.</div>
+                                            </div>
+                                            <div class="col-lg-5">
+                                                <label class="form-label">Round 1 &mdash; First Pick Team</label>
+                                                <select name="round1_first_team_id" class="form-select" required>
+                                                    <option value="">Select team</option>
+                                                    @foreach($teams as $team)
+                                                        @php
+                                                            $r1Config = $leagueRoundConfigs->firstWhere('round_number', 1);
+                                                            $r1First  = $r1Config ? (int)($r1Config->team_pick_order[0] ?? 0) : 0;
+                                                        @endphp
+                                                        <option value="{{ $team->id }}" @if($r1First === (int)$team->id) selected @endif>{{ $team->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <div class="form-text">Rounds 2+ are auto-generated: first-pick team shifts one spot each round.</div>
+                                            </div>
+                                            <div class="col-lg-4">
+                                                <button class="btn btn-primary w-100" type="submit">
+                                                    <i class="bi bi-check2-circle"></i>
+                                                    {{ $leagueRoundConfigs->isEmpty() ? 'Generate All Rounds' : 'Regenerate Rounds' }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                @if($leagueRoundConfigs->isEmpty())
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="bi bi-calendar-x" style="font-size: 2.5rem;"></i>
+                                        <p class="mt-2 mb-0">No rounds planned yet. Fill out the form above to generate the league schedule.</p>
+                                    </div>
+                                @else
+                                    <div class="table-responsive">
+                                        <table class="table align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:90px;">Round</th>
+                                                    <th>Pick Order (First &rarr; Last)</th>
+                                                    <th style="width:130px;">Type</th>
+                                                    <th style="width:120px;">Status</th>
+                                                    <th style="width:110px;">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($leagueRoundConfigs as $config)
+                                                    @php
+                                                        $roundStatus = 'planned';
+                                                        if ($config->round_number < $nextLeagueRoundNumber) {
+                                                            $roundStatus = 'completed';
+                                                        } elseif ($config->round_number === $nextLeagueRoundNumber && $activeRound) {
+                                                            $roundStatus = 'active';
+                                                        }
+                                                    @endphp
+                                                    <tr class="{{ $roundStatus === 'active' ? 'table-primary' : ($roundStatus === 'completed' ? 'opacity-50' : '') }}">
+                                                        <td class="fw-bold">Round {{ $config->round_number }}</td>
+                                                        <td>
+                                                            <div class="d-flex flex-wrap gap-1">
+                                                                @foreach($config->team_pick_order as $pos => $teamId)
+                                                                    @php
+                                                                        $pickTeam = $teamsById->get((int)$teamId);
+                                                                        $isFirst  = $pos === 0;
+                                                                        $isLast   = $pos === count($config->team_pick_order) - 1;
+                                                                    @endphp
+                                                                    <span class="badge {{ $isFirst ? 'text-bg-primary' : ($isLast ? 'text-bg-danger' : 'text-bg-secondary') }}">
+                                                                        {{ $pos + 1 }}. {{ $pickTeam?->name ?? 'Unknown' }}
+                                                                        @if($isFirst)<small class="ms-1">(first)</small>@endif
+                                                                        @if($isLast)<small class="ms-1">(last)</small>@endif
+                                                                    </span>
+                                                                @endforeach
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            @if($config->is_manually_set)
+                                                                <span class="badge text-bg-warning"><i class="bi bi-pencil"></i> Manual</span>
+                                                            @else
+                                                                <span class="badge text-bg-light text-dark"><i class="bi bi-arrow-repeat"></i> Auto</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if($roundStatus === 'completed')
+                                                                <span class="badge text-bg-success">Completed</span>
+                                                            @elseif($roundStatus === 'active')
+                                                                <span class="badge text-bg-primary">Active</span>
+                                                            @else
+                                                                <span class="badge text-bg-secondary">Planned</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if($roundStatus !== 'completed')
+                                                                <button
+                                                                    class="btn btn-sm btn-outline-secondary"
+                                                                    data-bs-toggle="modal"
+                                                                    data-bs-target="#editLeagueRoundModal"
+                                                                    data-round="{{ $config->round_number }}"
+                                                                    data-first-team="{{ $config->team_pick_order[0] ?? '' }}"
+                                                                    data-action="{{ route('admin.league.round.update', $config->round_number) }}"
+                                                                >
+                                                                    <i class="bi bi-pencil"></i> Override
+                                                                </button>
+                                                            @else
+                                                                <span class="text-muted small">&mdash;</span>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="mt-3">
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i>
+                                            <strong>Rotation rule:</strong> The first-pick team from round N moves to last in round N+1, the 2nd team becomes the new first pick.
+                                            Use <em>Override</em> to manually set a different first picker for any future round.
+                                            The planned first-pick is automatically pre-selected when starting a draft round from the <em>Draft Pool</em> tab.
+                                        </small>
+                                    </div>
+                                @endif
+                            @endif
+                        </div>
+                    </div>
+
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editLeagueRoundModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Override First Pick &mdash; Round <span id="editLeagueRoundNumber"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" id="editLeagueRoundForm">
+                    @csrf
+                    @method('PATCH')
+                    <div class="modal-body">
+                        <p class="text-muted small mb-3">The remaining teams keep their relative order from the existing plan, rotated so the chosen team goes first.</p>
+                        <div class="mb-3">
+                            <label class="form-label">First Pick Team</label>
+                            <select class="form-select" name="first_team_id" id="editLeagueRoundFirstTeam" required>
+                                @foreach($teams as $team)
+                                    <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Override</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -780,6 +982,22 @@
             document.getElementById('editCategoryForm').action = '/admin/categories/' + button.dataset.id;
             document.getElementById('edit_category_name').value = button.dataset.name || '';
             document.getElementById('edit_category_description').value = button.dataset.description || '';
+        }
+
+        const leagueRoundModal = document.getElementById('editLeagueRoundModal');
+        if (leagueRoundModal) {
+            leagueRoundModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                if (!button) return;
+                const roundNumber = button.getAttribute('data-round');
+                const firstTeamId = button.getAttribute('data-first-team');
+                const actionUrl   = button.getAttribute('data-action');
+                document.getElementById('editLeagueRoundNumber').textContent = roundNumber || '';
+                const form = document.getElementById('editLeagueRoundForm');
+                if (form && actionUrl) form.action = actionUrl;
+                const select = document.getElementById('editLeagueRoundFirstTeam');
+                if (select && firstTeamId) select.value = firstTeamId;
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function () {
