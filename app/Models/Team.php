@@ -13,6 +13,7 @@ class Team extends Model
         'email',
         'max_players',
         'logo',
+        'color',
     ];
 
     public function participants()

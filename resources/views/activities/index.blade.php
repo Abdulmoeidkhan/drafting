@@ -9,54 +9,7 @@
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark sticky-top app-navbar">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="{{ auth()->user()->isAdmin() ? '/admin/dashboard' : (auth()->user()->hasRole('team') ? route('team.dashboard') : route('player.profile')) }}">
-            <i class="bi bi-diagram-3"></i> Admin Panel
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-                @if(auth()->user()->isAdmin())
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/dashboard"><i class="bi bi-house"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/participants"><i class="bi bi-people"></i> Participants</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/teams"><i class="bi bi-shield"></i> Teams</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/users"><i class="bi bi-person-gear"></i> Users</a>
-                    </li>
-                @elseif(auth()->user()->hasRole('team'))
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ route('team.dashboard') }}"><i class="bi bi-speedometer2"></i> Team Dashboard</a>
-                    </li>
-                @elseif(auth()->user()->hasRole('player'))
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ route('player.profile') }}"><i class="bi bi-person-circle"></i> Player Profile</a>
-                    </li>
-                @endif
-
-                <li class="nav-item">
-                    <a class="nav-link active" href="{{ route('activities.index') }}"><i class="bi bi-activity"></i> Activities</a>
-                </li>
-                <li class="nav-item">
-                    <form method="POST" action="{{ route('logout') }}" style="display: inline;">
-                        @csrf
-                        <button type="submit" class="nav-link" style="border: none; background: none; cursor: pointer;">
-                            <i class="bi bi-box-arrow-right"></i> Logout
-                        </button>
-                    </form>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+@include('partials.portal-navbar')
 
 <div class="container py-4">
     @if(session('success'))
@@ -73,14 +26,20 @@
             <form method="GET" action="{{ route('activities.index') }}" class="row g-3">
                 <div class="col-md-2">
                     <label for="team_id" class="form-label">Team</label>
-                    <select name="team_id" id="team_id" class="form-select">
-                        <option value="">All Teams</option>
+                    <select name="team_id" id="team_id" class="form-select" {{ $isTeamUser ? 'disabled' : '' }}>
+                        @if(!$isTeamUser)
+                            <option value="">All Teams</option>
+                        @endif
                         @foreach($teams as $team)
                             <option value="{{ $team->id }}" {{ (string) $filters['team_id'] === (string) $team->id ? 'selected' : '' }}>
                                 {{ $team->name }}
                             </option>
                         @endforeach
                     </select>
+                    @if($isTeamUser)
+                        <input type="hidden" name="team_id" value="{{ $filters['team_id'] }}">
+                        <div class="form-text">Team users can only view their own activities.</div>
+                    @endif
                 </div>
 
                 <div class="col-md-2">
@@ -144,7 +103,7 @@
                             <th>Team</th>
                             <th>Player</th>
                             <th>Photo</th>
-                            <th>Category</th>
+                            <th>Skill Category</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -167,7 +126,22 @@
                                         <span class="badge text-bg-secondary">No Photo</span>
                                     @endif
                                 </td>
-                                <td>{{ $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized') }}</td>
+                                <td>
+                                    @php
+                                        $mainCategory = $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized');
+                                        $skills = collect($activity->participant?->skill_categories ?? [])->filter()->values()->all();
+                                    @endphp
+                                    <div><strong>{{ $mainCategory }}</strong></div>
+                                    @if(count($skills))
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach($skills as $skill)
+                                                <span class="badge text-bg-light border">{{ $skill }}</span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <small class="text-muted">No specific skills</small>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
@@ -201,5 +175,6 @@
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

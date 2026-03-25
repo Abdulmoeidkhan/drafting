@@ -10,54 +10,7 @@
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top app-navbar">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/admin/dashboard">
-                <i class="bi bi-diagram-3"></i> Admin Panel
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/admin/dashboard">
-                            <i class="bi bi-house"></i> Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/participants">
-                            <i class="bi bi-people"></i> Participants
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/teams">
-                            <i class="bi bi-shield"></i> Teams
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/users">
-                            <i class="bi bi-person-gear"></i> Users
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ route('activities.index') }}">
-                            <i class="bi bi-activity"></i> Activities
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <form method="POST" action="/logout" style="display: inline;">
-                            @csrf
-                            <button type="submit" class="nav-link" style="border: none; background: none; cursor: pointer;">
-                                <i class="bi bi-box-arrow-right"></i> Logout
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    @include('partials.portal-navbar')
 
     <!-- Main Content -->
     <div class="container main-container">

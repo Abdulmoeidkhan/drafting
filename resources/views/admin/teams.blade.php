@@ -11,43 +11,7 @@
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top app-navbar">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/admin/dashboard">
-                <i class="bi bi-diagram-3"></i> Admin Panel
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/dashboard"><i class="bi bi-house"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/participants"><i class="bi bi-people"></i> Participants</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/admin/teams"><i class="bi bi-shield"></i> Teams</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/users"><i class="bi bi-person-gear"></i> Users</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ route('activities.index') }}"><i class="bi bi-activity"></i> Activities</a>
-                    </li>
-                    <li class="nav-item">
-                        <form method="POST" action="/logout" style="display: inline;">
-                            @csrf
-                            <button type="submit" class="nav-link" style="border: none; background: none; cursor: pointer;">
-                                <i class="bi bi-box-arrow-right"></i> Logout
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    @include('partials.portal-navbar')
 
     <div class="container-fluid main-container" id="teamsPage" data-active-tab="{{ $activeTab }}" data-active-draft-category="{{ $activeDraftCategory }}">
         <div class="page-header">
@@ -149,8 +113,11 @@
                                             <div class="form-text">Optional. PNG, JPG, or WEBP up to 2MB.</div>
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label">Max Players</label>
-                                            <input type="number" class="form-control" name="max_players" min="1" max="30" value="11" required>
+                                            <label class="form-label">Team Color</label>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <input type="color" class="form-control form-control-color" name="color" value="#6c757d" title="Pick team color">
+                                                <span class="form-text mb-0">Used in pick-order badges and round tables.</span>
+                                            </div>
                                         </div>
                                         <button class="btn btn-primary w-100" type="submit">Create Team</button>
                                     </form>
@@ -190,6 +157,9 @@
                                                         </td>
                                                         <td>{{ $team->captain_name ?: 'Not set' }}</td>
                                                         <td>{{ $team->participants_count }} / {{ $team->max_players }}</td>
+                                                        <td>
+                                                            <span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:{{ $team->color ?? '#6c757d' }};border:2px solid #dee2e6;" title="{{ $team->color ?? '#6c757d' }}"></span>
+                                                        </td>
                                                         <td class="actions-cell">
                                                             <button
                                                                 class="btn btn-sm btn-outline-primary"
@@ -202,6 +172,7 @@
                                                                 data-email="{{ $team->email }}"
                                                                 data-max="{{ $team->max_players }}"
                                                                 data-logo="{{ $team->logo ? asset('storage/' . $team->logo) : '' }}"
+                                                                data-color="{{ $team->color ?? '#6c757d' }}"
                                                                 onclick="setEditTeam(this)"
                                                             >
                                                                 Edit
@@ -230,8 +201,8 @@
                         <div class="sub-card">
                             <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
                                 <div>
-                                    <h4 class="mb-1"><i class="bi bi-list-check"></i> Category-Wise Draft Rounds</h4>
-                                    <p class="text-muted small mb-0">Start a round by selecting category, start team, pick count, and turn timer. Picks then rotate one-by-one.</p>
+                                    <h4 class="mb-1"><i class="bi bi-list-check"></i> Draft Rounds</h4>
+                                    <p class="text-muted small mb-0">Each round every team picks one player in the order defined by the League Setup. Rounds auto-advance when all teams have picked.</p>
                                 </div>
                                 <a href="{{ route('admin.teams', ['tab' => 'categories']) }}" class="btn btn-outline-secondary btn-sm">
                                     Manage Categories
@@ -262,8 +233,38 @@
                                 @else
                                     <form method="POST" action="{{ route('admin.draft.round.start') }}">
                                         @csrf
+                                        @php
+                                            $completedRoundsForDraft = \App\Models\DraftRound::query()->where('status','completed')->count();
+                                            $upcomingRoundNum        = $completedRoundsForDraft + 1;
+                                            $upcomingLeagueConfig    = $leagueRoundConfigs->firstWhere('round_number', $upcomingRoundNum);
+                                            $totalLeagueRounds       = $leagueRoundConfigs->count();
+                                        @endphp
+                                        @if(!$leagueRoundConfigs->count())
+                                            <div class="alert alert-warning mb-0">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                                Configure the <a href="{{ route('admin.teams', ['tab' => 'league-setup']) }}">League Setup</a> first &mdash; it defines max players, number of rounds, and the pick order.
+                                            </div>
+                                        @elseif($upcomingRoundNum > $totalLeagueRounds)
+                                            <div class="alert alert-success mb-0">
+                                                <i class="bi bi-trophy"></i>
+                                                All <strong>{{ $totalLeagueRounds }}</strong> league rounds have been completed. The draft is finished.
+                                            </div>
+                                        @else
                                         <div class="row g-3">
-                                            <div class="col-lg-3">
+                                            <div class="col-12">
+                                                <div class="alert alert-info mb-0 py-2">
+                                                    <strong>Round {{ $upcomingRoundNum }} of {{ $totalLeagueRounds }}</strong> &mdash; Pick order:
+                                                    @if($upcomingLeagueConfig)
+                                                        <span class="ms-1 d-inline-flex flex-wrap gap-1">
+                                                        @foreach($upcomingLeagueConfig->team_pick_order as $pos => $tId)
+                                                            @php $pt = $teamsById->get((int)$tId); $ptc = $pt?->color ?? '#6c757d'; @endphp
+                                                            <span class="badge" style="background:{{ $ptc }};color:#fff;">{{ $pos+1 }}. {{ $pt?->name ?? 'Unknown' }}</span>
+                                                        @endforeach
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4">
                                                 <label class="form-label">Primary Category</label>
                                                 <select name="category_id" class="form-select" required>
                                                     <option value="">Select category</option>
@@ -272,36 +273,14 @@
                                                     @endforeach
                                                 </select>
                                             </div>
-                                            <div class="col-lg-3">
+                                            <div class="col-lg-4">
                                                 <label class="form-label">Allow Also From (Higher)</label>
                                                 <select name="higher_category_ids[]" class="form-select" multiple>
                                                     @foreach($categories as $category)
                                                         <option value="{{ $category->id }}">{{ $category->name }}</option>
                                                     @endforeach
                                                 </select>
-                                                <div class="form-text">Optional. Example: In Gold round, also allow Platinum.</div>
-                                            </div>
-                                            <div class="col-lg-2">
-                                                <label class="form-label">Starting Team
-                                                    @if($nextLeagueRoundConfig)
-                                                        <span class="badge text-bg-info ms-1">Round {{ $nextLeagueRoundNumber }} planned</span>
-                                                    @endif
-                                                </label>
-                                                <select name="starting_team_id" class="form-select" required>
-                                                    <option value="">Select team</option>
-                                                    @foreach($teams as $team)
-                                                        @php $plannedFirstId = $nextLeagueRoundConfig ? (int)($nextLeagueRoundConfig->team_pick_order[0] ?? 0) : 0; @endphp
-                                                        <option value="{{ $team->id }}" @if($plannedFirstId === (int)$team->id) selected @endif>{{ $team->name }}</option>
-                                                    @endforeach
-                                                </select>
-                                                @if($nextLeagueRoundConfig)
-                                                    <div class="form-text text-info"><i class="bi bi-calendar3"></i> Pre-selected from league plan for Round {{ $nextLeagueRoundNumber }}.</div>
-                                                @endif
-                                            </div>
-                                            <div class="col-lg-2">
-                                                <label class="form-label">Picks / Team</label>
-                                                <input type="number" class="form-control" name="picks_per_team" value="1" min="1" max="10" required>
-                                                <div class="form-text">Set `1` for round-1 style flow.</div>
+                                                <div class="form-text">Optional. Hold Ctrl/Cmd to select multiple.</div>
                                             </div>
                                             <div class="col-lg-2">
                                                 <label class="form-label">Turn Time</label>
@@ -311,10 +290,11 @@
                                                     <option value="180">3 Minutes</option>
                                                 </select>
                                             </div>
+                                            <div class="col-lg-2 d-flex align-items-end">
+                                                <button class="btn btn-primary w-100" type="submit">Start Round {{ $upcomingRoundNum }}</button>
+                                            </div>
                                         </div>
-                                        <div class="mt-3">
-                                            <button class="btn btn-primary" type="submit">Start Draft Round</button>
-                                        </div>
+                                        @endif
                                     </form>
                                 @endif
                             </div>
@@ -409,6 +389,7 @@
                                                         <th>Photo</th>
                                                         <th>Player</th>
                                                         <th>Email</th>
+                                                        <th>Skill Category</th>
                                                         <th>City</th>
                                                         <th>Draft To Team</th>
                                                     </tr>
@@ -430,6 +411,19 @@
                                                             </td>
                                                             <td>{{ $participant->full_name }}</td>
                                                             <td>{{ $participant->email }}</td>
+                                                            <td>
+                                                                @php $participantSkills = collect($participant->skill_categories ?? [])->filter()->values()->all(); @endphp
+                                                                <div><strong>{{ $participant->category?->name ?: 'Uncategorized' }}</strong></div>
+                                                                @if(count($participantSkills))
+                                                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                                                        @foreach($participantSkills as $skill)
+                                                                            <span class="badge text-bg-light border">{{ $skill }}</span>
+                                                                        @endforeach
+                                                                    </div>
+                                                                @else
+                                                                    <small class="text-muted">No specific skills</small>
+                                                                @endif
+                                                            </td>
                                                             <td>{{ $participant->city }}</td>
                                                             <td>
                                                                 @if($activeRound)
@@ -475,7 +469,7 @@
                                                         </tr>
                                                     @empty
                                                         <tr>
-                                                            <td colspan="5" class="text-center text-muted py-4">No available players in this category round.</td>
+                                                            <td colspan="6" class="text-center text-muted py-4">No available players in this category round.</td>
                                                         </tr>
                                                     @endforelse
                                                 </tbody>
@@ -499,6 +493,7 @@
                                                     <th>Photo</th>
                                                     <th>Player</th>
                                                     <th>Email</th>
+                                                    <th>Skill Category</th>
                                                     <th>City</th>
                                                     <th>Draft To Team</th>
                                                 </tr>
@@ -520,6 +515,19 @@
                                                         </td>
                                                         <td>{{ $participant->full_name }}</td>
                                                         <td>{{ $participant->email }}</td>
+                                                        <td>
+                                                            @php $uncatSkills = collect($participant->skill_categories ?? [])->filter()->values()->all(); @endphp
+                                                            <div><strong>{{ $participant->category?->name ?: 'Uncategorized' }}</strong></div>
+                                                            @if(count($uncatSkills))
+                                                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                                                    @foreach($uncatSkills as $skill)
+                                                                        <span class="badge text-bg-light border">{{ $skill }}</span>
+                                                                    @endforeach
+                                                                </div>
+                                                            @else
+                                                                <small class="text-muted">No specific skills</small>
+                                                            @endif
+                                                        </td>
                                                         <td>{{ $participant->city }}</td>
                                                         <td>
                                                             @if($activeRound)
@@ -549,7 +557,7 @@
                                                     </tr>
                                                 @empty
                                                     <tr>
-                                                        <td colspan="5" class="text-center text-muted py-4">No uncategorized players available.</td>
+                                                        <td colspan="6" class="text-center text-muted py-4">No uncategorized players available.</td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>
@@ -569,7 +577,7 @@
                                         <tr>
                                             <th>Player</th>
                                             <th>Team</th>
-                                            <th>Category</th>
+                                            <th>Skill Category</th>
                                             <th>Drafted At</th>
                                             <th>Action</th>
                                         </tr>
@@ -579,7 +587,19 @@
                                             <tr>
                                                 <td>{{ $participant->full_name }}</td>
                                                 <td>{{ $participant->team?->name }}</td>
-                                                <td>{{ $participant->category?->name ?: 'Uncategorized' }}</td>
+                                                <td>
+                                                    @php $draftedSkills = collect($participant->skill_categories ?? [])->filter()->values()->all(); @endphp
+                                                    <div><strong>{{ $participant->category?->name ?: 'Uncategorized' }}</strong></div>
+                                                    @if(count($draftedSkills))
+                                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                                            @foreach($draftedSkills as $skill)
+                                                                <span class="badge text-bg-light border">{{ $skill }}</span>
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        <small class="text-muted">No specific skills</small>
+                                                    @endif
+                                                </td>
                                                 <td>{{ optional($participant->drafted_at)->format('M d, Y H:i') }}</td>
                                                 <td>
                                                     @if($participant->team)
@@ -690,7 +710,7 @@
                             <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
                                 <div>
                                     <h4 class="mb-1"><i class="bi bi-calendar3"></i> League Round Setup</h4>
-                                    <p class="text-muted small mb-0">Pre-plan all draft rounds. Whoever picks first in a round rotates to last next round &mdash; the 2nd team becomes the new first pick.</p>
+                                    <p class="text-muted small mb-0">Pre-plan all draft rounds. Set the full pick order for Round 1 by dragging teams; subsequent rounds are auto-generated &mdash; first-pick team moves to last each round, 2nd becomes new first. Total rounds = max players per team.</p>
                                 </div>
                                 @if($leagueRoundConfigs->isNotEmpty())
                                     <form method="POST" action="{{ route('admin.league.setup.clear') }}" onsubmit="return confirm('Clear the entire league round plan?');">
@@ -711,31 +731,51 @@
                                         <i class="bi bi-gear"></i>
                                         {{ $leagueRoundConfigs->isEmpty() ? 'Configure League Rounds' : 'Reconfigure League (replaces current plan)' }}
                                     </h5>
-                                    <form method="POST" action="{{ route('admin.league.setup.save') }}">
+                                    <form method="POST" action="{{ route('admin.league.setup.save') }}" id="leagueSetupForm">
                                         @csrf
-                                        <div class="row g-3 align-items-end">
+                                        @php
+                                            $r1Config     = $leagueRoundConfigs->firstWhere('round_number', 1);
+                                            $r1OrderIds   = $r1Config ? collect($r1Config->team_pick_order)->map(fn($id) => (int)$id)->all() : [];
+                                            // Merge: saved order first, then any new teams not yet in saved order
+                                            $savedTeamIds = collect($r1OrderIds);
+                                            $allTeamIds   = $teams->pluck('id')->map(fn($id) => (int)$id);
+                                            $newTeamIds   = $allTeamIds->diff($savedTeamIds);
+                                            $orderedTeams = $savedTeamIds->merge($newTeamIds)
+                                                ->map(fn($id) => $teams->firstWhere('id', $id))
+                                                ->filter()
+                                                ->values();
+                                        @endphp
+                                        <div class="row g-3">
                                             <div class="col-lg-3">
-                                                <label class="form-label">Total Rounds</label>
-                                                <input type="number" class="form-control" name="total_rounds" min="1" max="99"
-                                                    value="{{ $leagueRoundConfigs->count() ?: 6 }}" required>
-                                                <div class="form-text">Number of draft rounds in this league.</div>
+                                                <label class="form-label fw-semibold">Max Players per Team</label>
+                                                <input type="number" class="form-control" name="max_players" min="1" max="99"
+                                                    value="{{ $leagueRoundConfigs->count() ?: 16 }}" required>
+                                                <div class="form-text">Each team gets this many players. One round per player &mdash; total rounds = this number.</div>
                                             </div>
-                                            <div class="col-lg-5">
-                                                <label class="form-label">Round 1 &mdash; First Pick Team</label>
-                                                <select name="round1_first_team_id" class="form-select" required>
-                                                    <option value="">Select team</option>
-                                                    @foreach($teams as $team)
-                                                        @php
-                                                            $r1Config = $leagueRoundConfigs->firstWhere('round_number', 1);
-                                                            $r1First  = $r1Config ? (int)($r1Config->team_pick_order[0] ?? 0) : 0;
-                                                        @endphp
-                                                        <option value="{{ $team->id }}" @if($r1First === (int)$team->id) selected @endif>{{ $team->name }}</option>
+                                            <div class="col-lg-9">
+                                                <label class="form-label fw-semibold">Round 1 &mdash; Draft Pick Order</label>
+                                                <p class="form-text mb-2">Drag teams to set who picks first, second, etc. Rounds 2&ndash;{{ $leagueRoundConfigs->count() ?: 16 }} are auto-generated: first-pick team moves to last each round.</p>
+                                                <ul id="round1SortableList" class="list-group" style="cursor:grab; user-select:none;">
+                                                    @foreach($orderedTeams as $idx => $t)
+                                                        @php $teamColor = $t->color ?? '#6c757d'; @endphp
+                                                        <li class="list-group-item d-flex align-items-center gap-2 py-2"
+                                                            data-team-id="{{ $t->id }}"
+                                                            style="border-left: 4px solid {{ $teamColor }};">
+                                                            <span class="drag-handle text-muted me-1" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></span>
+                                                            <span class="pick-position-badge badge" style="background:{{ $teamColor }};color:#fff;">{{ $idx + 1 }}</span>
+                                                            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ $teamColor }};flex-shrink:0;"></span>
+                                                            <span class="fw-semibold">{{ $t->name }}</span>
+                                                            @if($t->short_code)
+                                                                <small class="text-muted">({{ $t->short_code }})</small>
+                                                            @endif
+                                                            <input type="hidden" name="round1_order[]" value="{{ $t->id }}">
+                                                        </li>
                                                     @endforeach
-                                                </select>
-                                                <div class="form-text">Rounds 2+ are auto-generated: first-pick team shifts one spot each round.</div>
+                                                </ul>
+                                                <div class="form-text mt-1"><i class="bi bi-info-circle"></i> Position 1 = first pick, last position = last pick in Round 1.</div>
                                             </div>
-                                            <div class="col-lg-4">
-                                                <button class="btn btn-primary w-100" type="submit">
+                                            <div class="col-12">
+                                                <button class="btn btn-primary" type="submit">
                                                     <i class="bi bi-check2-circle"></i>
                                                     {{ $leagueRoundConfigs->isEmpty() ? 'Generate All Rounds' : 'Regenerate Rounds' }}
                                                 </button>
@@ -777,11 +817,12 @@
                                                             <div class="d-flex flex-wrap gap-1">
                                                                 @foreach($config->team_pick_order as $pos => $teamId)
                                                                     @php
-                                                                        $pickTeam = $teamsById->get((int)$teamId);
-                                                                        $isFirst  = $pos === 0;
-                                                                        $isLast   = $pos === count($config->team_pick_order) - 1;
+                                                                        $pickTeam  = $teamsById->get((int)$teamId);
+                                                                        $pickColor = $pickTeam?->color ?? '#6c757d';
+                                                                        $isFirst   = $pos === 0;
+                                                                        $isLast    = $pos === count($config->team_pick_order) - 1;
                                                                     @endphp
-                                                                    <span class="badge {{ $isFirst ? 'text-bg-primary' : ($isLast ? 'text-bg-danger' : 'text-bg-secondary') }}">
+                                                                    <span class="badge" style="background:{{ $pickColor }};color:#fff;{{ $isFirst ? 'outline:2px solid #0d6efd;' : '' }}">
                                                                         {{ $pos + 1 }}. {{ $pickTeam?->name ?? 'Unknown' }}
                                                                         @if($isFirst)<small class="ms-1">(first)</small>@endif
                                                                         @if($isLast)<small class="ms-1">(last)</small>@endif
@@ -829,8 +870,8 @@
                                     <div class="mt-3">
                                         <small class="text-muted">
                                             <i class="bi bi-info-circle"></i>
-                                            <strong>Rotation rule:</strong> The first-pick team from round N moves to last in round N+1, the 2nd team becomes the new first pick.
-                                            Use <em>Override</em> to manually set a different first picker for any future round.
+                                            <strong>Rotation rule:</strong> The first-pick team from round N moves to last in round N+1; the 2nd team becomes the new first pick.
+                                            Use <em>Override</em> to manually reorder any future round.
                                             The planned first-pick is automatically pre-selected when starting a draft round from the <em>Draft Pool</em> tab.
                                         </small>
                                     </div>
@@ -913,8 +954,11 @@
                             <div class="form-text">Leave empty to keep the current logo.</div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Max Players</label>
-                            <input type="number" class="form-control" id="edit_team_max_players" name="max_players" min="1" max="30" required>
+                            <label class="form-label">Team Color</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="color" class="form-control form-control-color" id="edit_team_color" name="color" value="#6c757d" title="Pick team color">
+                                <span class="form-text mb-0">Shown in pick-order badges and round tables.</span>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -956,6 +1000,29 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    <script>
+        // ── Round 1 sortable pick-order list ────────────────────────────────────
+        (function () {
+            const list = document.getElementById('round1SortableList');
+            if (!list) return;
+
+            function refreshPositionBadges() {
+                list.querySelectorAll('li').forEach(function (li, idx) {
+                    const badge = li.querySelector('.pick-position-badge');
+                    if (badge) badge.textContent = idx + 1;
+                    // update the hidden input value to current team id (already set, just ensure order)
+                });
+            }
+
+            Sortable.create(list, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'list-group-item-primary',
+                onEnd: refreshPositionBadges,
+            });
+        }());
+    </script>
     <script>
         function setEditTeam(button) {
             const id = button.dataset.id;
@@ -965,7 +1032,7 @@
             document.getElementById('edit_team_short_code').value = button.dataset.short || '';
             document.getElementById('edit_team_captain_name').value = button.dataset.captain || '';
             document.getElementById('edit_team_email').value = button.dataset.email || '';
-            document.getElementById('edit_team_max_players').value = button.dataset.max || 11;
+            document.getElementById('edit_team_color').value = button.dataset.color || '#6c757d';
 
             const preview = document.getElementById('edit_team_logo_preview');
 

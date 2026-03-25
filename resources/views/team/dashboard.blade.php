@@ -5,21 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Team Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark app-navbar">
-    <div class="container-fluid">
-        <span class="navbar-brand">Team Dashboard</span>
-        <div class="ms-auto d-flex gap-2">
-            <a href="{{ route('activities.index') }}" class="btn btn-sm btn-outline-light">All Activities</a>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="btn btn-sm btn-outline-light">Logout</button>
-            </form>
-        </div>
-    </div>
-</nav>
+@include('partials.portal-navbar')
 
 <div class="container py-4">
     @if(session('success'))
@@ -63,7 +53,7 @@
                                     <th>Photo</th>
                                     <th>Player</th>
                                     <th>Email</th>
-                                    <th>Category</th>
+                                    <th>Skill Category</th>
                                     <th class="text-end">Action</th>
                                 </tr>
                             </thead>
@@ -84,7 +74,19 @@
                                         </td>
                                         <td>{{ $player->full_name }}</td>
                                         <td>{{ $player->email }}</td>
-                                        <td>{{ $player->category?->name ?: 'Uncategorized' }}</td>
+                                        <td>
+                                            @php $playerSkills = collect($player->skill_categories ?? [])->filter()->values()->all(); @endphp
+                                            <div><strong>{{ $player->category?->name ?: 'Uncategorized' }}</strong></div>
+                                            @if(count($playerSkills))
+                                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                                    @foreach($playerSkills as $skill)
+                                                        <span class="badge text-bg-light border">{{ $skill }}</span>
+                                                    @endforeach
+                                                </div>
+                                            @else
+                                                <small class="text-muted">No specific skills</small>
+                                            @endif
+                                        </td>
                                         <td class="text-end">
                                             @if($canPick)
                                                 <form method="POST" action="{{ route('team.draft.round.pick', ['round' => $activeRound->id, 'participant' => $player->id]) }}" class="d-inline">
@@ -121,7 +123,7 @@
                             <th>Pick #</th>
                             <th>Team</th>
                             <th>Player</th>
-                            <th>Category</th>
+                            <th>Skill Category</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -132,7 +134,22 @@
                                 <td>{{ $activity->pick_number }}</td>
                                 <td>{{ $activity->team?->name ?: 'N/A' }}</td>
                                 <td>{{ $activity->participant?->full_name ?: 'N/A' }}</td>
-                                <td>{{ $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized') }}</td>
+                                <td>
+                                    @php
+                                        $activityMainCategory = $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized');
+                                        $activitySkills = collect($activity->participant?->skill_categories ?? [])->filter()->values()->all();
+                                    @endphp
+                                    <div><strong>{{ $activityMainCategory }}</strong></div>
+                                    @if(count($activitySkills))
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach($activitySkills as $skill)
+                                                <span class="badge text-bg-light border">{{ $skill }}</span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <small class="text-muted">No specific skills</small>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
@@ -154,7 +171,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Email</th>
-                            <th>Category</th>
+                            <th>Skill Category</th>
                             <th>Drafted At</th>
                         </tr>
                     </thead>
@@ -163,7 +180,19 @@
                             <tr>
                                 <td>{{ $participant->full_name }}</td>
                                 <td>{{ $participant->email }}</td>
-                                <td>{{ $participant->category?->name ?: 'Uncategorized' }}</td>
+                                <td>
+                                    @php $participantSkills = collect($participant->skill_categories ?? [])->filter()->values()->all(); @endphp
+                                    <div><strong>{{ $participant->category?->name ?: 'Uncategorized' }}</strong></div>
+                                    @if(count($participantSkills))
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach($participantSkills as $skill)
+                                                <span class="badge text-bg-light border">{{ $skill }}</span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <small class="text-muted">No specific skills</small>
+                                    @endif
+                                </td>
                                 <td>{{ optional($participant->drafted_at)->format('M d, Y H:i') ?: '-' }}</td>
                             </tr>
                         @empty
@@ -177,5 +206,6 @@
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

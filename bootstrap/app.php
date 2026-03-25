@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'activities.scope' => \App\Http\Middleware\ScopeActivitiesForTeam::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
