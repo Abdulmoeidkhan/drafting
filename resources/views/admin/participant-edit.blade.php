@@ -75,9 +75,20 @@
                             <input type="text" class="form-control" name="nationality" value="{{ $participant->nationality }}" required>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">League</label>
+                            <select class="form-select" name="league_type" required>
+                                <option value="male" {{ ($participant->league_type ?? 'male') === 'male' ? 'selected' : '' }}>Male</option>
+                                <option value="female" {{ ($participant->league_type ?? 'male') === 'female' ? 'selected' : '' }}>Female</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <label class="form-label">City</label>
                             <input type="text" class="form-control" name="city" value="{{ $participant->city }}" required>
                         </div>
+                        <div class="col-md-6"></div>
                     </div>
 
                     <div class="mb-3">

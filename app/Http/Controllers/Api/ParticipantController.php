@@ -17,6 +17,7 @@ class ParticipantController extends Controller
     {
         $perPage = $request->query('per_page', 15);
         $search = $request->query('search', '');
+        $leagueType = $request->query('league_type');
 
         $query = Participant::query();
 
@@ -24,6 +25,10 @@ class ParticipantController extends Controller
             $query->where('full_name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
                   ->orWhere('city', 'like', "%{$search}%");
+        }
+
+        if (in_array($leagueType, ['male', 'female'], true)) {
+            $query->where('league_type', $leagueType);
         }
 
         $participants = $query->paginate($perPage);
@@ -65,6 +70,7 @@ class ParticipantController extends Controller
                 'email' => 'required|email|unique:participants,email',
                 'dob' => 'required|date',
                 'nationality' => 'required|string',
+                'league_type' => 'required|in:male,female',
                 'identity' => 'required|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'required|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'required|string|max:10',
@@ -134,6 +140,7 @@ class ParticipantController extends Controller
                 'email' => 'nullable|email|unique:participants,email,' . $id,
                 'dob' => 'nullable|date',
                 'nationality' => 'nullable|string',
+                'league_type' => 'nullable|in:male,female',
                 'identity' => 'nullable|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'nullable|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'nullable|string|max:10',

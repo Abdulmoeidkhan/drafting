@@ -40,6 +40,7 @@ class ParticipantFormController extends Controller
                 'email' => 'required|email|unique:participants,email',
                 'dob' => 'required|date',
                 'nationality' => 'required|string|max:255|not_in:India,Israel',
+                'league_type' => 'required|in:male,female',
                 'identity' => 'required|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'required|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'required|string|max:10',

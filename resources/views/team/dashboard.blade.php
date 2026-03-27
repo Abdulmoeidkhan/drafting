@@ -24,6 +24,7 @@
         <div class="card-body">
             <h4 class="mb-2">{{ $team->name }}</h4>
             <p class="mb-1"><strong>Email:</strong> {{ $team->email }}</p>
+            <p class="mb-1"><strong>League:</strong> {{ ucfirst((string) ($teamLeagueType ?? $team->league_type ?? 'male')) }}</p>
             <p class="mb-1"><strong>Captain:</strong> {{ $team->captain_name ?: 'Not set' }}</p>
             <p class="mb-0"><strong>Roster:</strong> {{ $participants->count() }} / {{ $team->max_players }}</p>
         </div>

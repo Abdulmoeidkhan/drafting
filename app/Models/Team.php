@@ -11,6 +11,7 @@ class Team extends Model
         'short_code',
         'captain_name',
         'email',
+        'league_type',
         'max_players',
         'logo',
         'color',

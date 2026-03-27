@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class DraftRound extends Model
 {
     protected $fillable = [
+        'league_type',
         'category_id',
         'start_team_id',
         'current_team_id',

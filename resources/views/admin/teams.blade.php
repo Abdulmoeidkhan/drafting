@@ -13,10 +13,15 @@
 <body>
     @include('partials.portal-navbar')
 
-    <div class="container-fluid main-container" id="teamsPage" data-active-tab="{{ $activeTab }}" data-active-draft-category="{{ $activeDraftCategory }}">
+    <div class="container-fluid main-container" id="teamsPage" data-active-tab="{{ $activeTab }}" data-active-draft-category="{{ $activeDraftCategory }}" data-active-league="{{ $activeLeagueType }}">
         <div class="page-header">
             <h1><i class="bi bi-trophy"></i> Team Module</h1>
             <p>Teams are managed here and players can only be assigned through drafting.</p>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <span class="badge text-bg-dark">Active League: {{ $activeLeagueLabel }}</span>
+                <a href="{{ route('admin.teams', ['tab' => $activeTab, 'category' => $activeDraftCategory, 'league' => 'male']) }}" class="btn btn-sm {{ $activeLeagueType === 'male' ? 'btn-primary' : 'btn-outline-primary' }}">Male League</a>
+                <a href="{{ route('admin.teams', ['tab' => $activeTab, 'category' => $activeDraftCategory, 'league' => 'female']) }}" class="btn btn-sm {{ $activeLeagueType === 'female' ? 'btn-primary' : 'btn-outline-primary' }}">Female League</a>
+            </div>
         </div>
 
         @if(session('success'))
@@ -91,6 +96,7 @@
                                     <h4><i class="bi bi-plus-circle"></i> Create Team</h4>
                                     <form method="POST" action="{{ route('admin.team.create') }}" enctype="multipart/form-data">
                                         @csrf
+                                        <input type="hidden" name="league_type" value="{{ $activeLeagueType }}">
                                         <div class="mb-3">
                                             <label class="form-label">Team Name</label>
                                             <input class="form-control" name="name" required>
@@ -170,6 +176,7 @@
                                                                 data-short="{{ $team->short_code }}"
                                                                 data-captain="{{ $team->captain_name }}"
                                                                 data-email="{{ $team->email }}"
+                                                                data-league="{{ $team->league_type ?? 'male' }}"
                                                                 data-max="{{ $team->max_players }}"
                                                                 data-logo="{{ $team->logo ? asset('storage/' . $team->logo) : '' }}"
                                                                 data-color="{{ $team->color ?? '#6c757d' }}"
@@ -204,7 +211,7 @@
                                     <h4 class="mb-1"><i class="bi bi-list-check"></i> Draft Rounds</h4>
                                     <p class="text-muted small mb-0">Each round every team picks one player in the order defined by the League Setup. Rounds auto-advance when all teams have picked.</p>
                                 </div>
-                                <a href="{{ route('admin.teams', ['tab' => 'categories']) }}" class="btn btn-outline-secondary btn-sm">
+                                <a href="{{ route('admin.teams', ['tab' => 'categories', 'league' => $activeLeagueType]) }}" class="btn btn-outline-secondary btn-sm">
                                     Manage Categories
                                 </a>
                             </div>
@@ -233,8 +240,9 @@
                                 @else
                                     <form method="POST" action="{{ route('admin.draft.round.start') }}">
                                         @csrf
+                                        <input type="hidden" name="league_type" value="{{ $activeLeagueType }}">
                                         @php
-                                            $completedRoundsForDraft = \App\Models\DraftRound::query()->where('status','completed')->count();
+                                            $completedRoundsForDraft = \App\Models\DraftRound::query()->where('status','completed')->where('league_type', $activeLeagueType)->count();
                                             $upcomingRoundNum        = $completedRoundsForDraft + 1;
                                             $upcomingLeagueConfig    = $leagueRoundConfigs->firstWhere('round_number', $upcomingRoundNum);
                                             $totalLeagueRounds       = $leagueRoundConfigs->count();
@@ -242,7 +250,7 @@
                                         @if(!$leagueRoundConfigs->count())
                                             <div class="alert alert-warning mb-0">
                                                 <i class="bi bi-exclamation-triangle"></i>
-                                                Configure the <a href="{{ route('admin.teams', ['tab' => 'league-setup']) }}">League Setup</a> first &mdash; it defines max players, number of rounds, and the pick order.
+                                                Configure the <a href="{{ route('admin.teams', ['tab' => 'league-setup', 'league' => $activeLeagueType]) }}">League Setup</a> first &mdash; it defines max players, number of rounds, and the pick order.
                                             </div>
                                         @elseif($upcomingRoundNum > $totalLeagueRounds)
                                             <div class="alert alert-success mb-0">
@@ -288,6 +296,8 @@
                                                     <option value="120">2 Minutes</option>
                                                     <option value="150" selected>2.5 Minutes</option>
                                                     <option value="180">3 Minutes</option>
+                                                    <option value="240">4 Minutes</option>
+                                                    <option value="300">5 Minutes</option>
                                                 </select>
                                             </div>
                                             <div class="col-lg-2 d-flex align-items-end">
@@ -668,7 +678,7 @@
                                                         <td>{{ $category->description ?: 'No description' }}</td>
                                                         <td>{{ $category->participants_count }}</td>
                                                         <td>
-                                                            <a href="{{ route('admin.teams', ['tab' => 'draft', 'category' => $category->id]) }}" class="btn btn-sm btn-outline-secondary">
+                                                            <a href="{{ route('admin.teams', ['tab' => 'draft', 'category' => $category->id, 'league' => $activeLeagueType]) }}" class="btn btn-sm btn-outline-secondary">
                                                                 Start Draft Round
                                                             </a>
                                                         </td>
@@ -715,6 +725,7 @@
                                 @if($leagueRoundConfigs->isNotEmpty())
                                     <form method="POST" action="{{ route('admin.league.setup.clear') }}" onsubmit="return confirm('Clear the entire league round plan?');">
                                         @csrf
+                                        <input type="hidden" name="league_type" value="{{ $activeLeagueType }}">
                                         @method('DELETE')
                                         <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i> Clear All Rounds</button>
                                     </form>
@@ -733,6 +744,7 @@
                                     </h5>
                                     <form method="POST" action="{{ route('admin.league.setup.save') }}" id="leagueSetupForm">
                                         @csrf
+                                        <input type="hidden" name="league_type" value="{{ $activeLeagueType }}">
                                         @php
                                             $r1Config     = $leagueRoundConfigs->firstWhere('round_number', 1);
                                             $r1OrderIds   = $r1Config ? collect($r1Config->team_pick_order)->map(fn($id) => (int)$id)->all() : [];
@@ -896,6 +908,7 @@
                     @csrf
                     @method('PATCH')
                     <div class="modal-body">
+                        <input type="hidden" name="league_type" id="editLeagueRoundLeagueType" value="{{ $activeLeagueType }}">
                         <p class="text-muted small mb-3">The remaining teams keep their relative order from the existing plan, rotated so the chosen team goes first.</p>
                         <div class="mb-3">
                             <label class="form-label">First Pick Team</label>
@@ -947,6 +960,13 @@
                         <div class="mb-3">
                             <label class="form-label">Team Login Email</label>
                             <input type="email" class="form-control" id="edit_team_email" name="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">League</label>
+                            <select class="form-select" id="edit_team_league_type" name="league_type" required>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Replace Logo</label>
@@ -1032,6 +1052,7 @@
             document.getElementById('edit_team_short_code').value = button.dataset.short || '';
             document.getElementById('edit_team_captain_name').value = button.dataset.captain || '';
             document.getElementById('edit_team_email').value = button.dataset.email || '';
+            document.getElementById('edit_team_league_type').value = button.dataset.league || 'male';
             document.getElementById('edit_team_color').value = button.dataset.color || '#6c757d';
 
             const preview = document.getElementById('edit_team_logo_preview');

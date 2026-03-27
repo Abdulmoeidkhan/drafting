@@ -103,6 +103,10 @@
                         <span class="info-label">Nationality</span>
                         <span class="info-value">{{ $participant->nationality }}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="info-label">League</span>
+                        <span class="info-value">{{ ucfirst((string) ($participant->league_type ?? 'male')) }}</span>
+                    </div>
                 </div>
 
                 <div class="section-title">Medical & Performance Information</div>

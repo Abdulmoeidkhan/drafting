@@ -20,7 +20,7 @@
     <div class="container" style="max-width:900px; margin-top:24px;">
         <div class="form-container">
             <div class="form-header">
-                <h2>Participant Registration</h2>
+                <h2>Player Registration</h2>
             </div>
             <div class="form-body">
                 <div class="alert alert-danger alert-error" id="errorAlert"></div>
@@ -28,6 +28,17 @@
                 <form id="registrationForm" method="POST" action="{{ route('form.submit') }}"
                     enctype="multipart/form-data">
                     @csrf
+                    <div class="row">
+
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label required" for="league_type">LEAGUE</label>
+                            <select class="form-select" id="league_type" name="league_type" required>
+                                <option value="">Select League</option>
+                                <option value="male">KTPL (Mens League)</option>
+                                <option value="female">WTPL (Women League)</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label required" for="first_name">FIRST NAME</label>
@@ -206,7 +217,7 @@ You may also mention previous tournament participation, notable achievements, ma
 
                         <div class="mb-3">
                             <label class="form-label required"
-                            id="id_picture_document"
+                                id="id_picture_document"
                                 title="ID card or national identity card photograph with plain white background, neutral expression, direct eye contact, even lighting, and professional attire suitable for official records.">PICTURE
                                 (CNIC/IDENTITY)</label>
                             <div class="row">

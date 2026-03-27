@@ -25,6 +25,7 @@ class Participant extends Model
         'email',
         'dob',
         'nationality',
+        'league_type',
         'identity',
         'kit_size',
         'shirt_number',

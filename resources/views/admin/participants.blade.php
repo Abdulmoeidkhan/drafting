@@ -49,6 +49,14 @@
                         <input type="text" name="search" class="form-control" placeholder="Search by name, email, or city..." value="{{ request('search') }}">
                     </div>
                     <div class="col-md-3 mb-3">
+                        <label class="form-label">League</label>
+                        <select name="league_type" class="form-select">
+                            <option value="">All Leagues</option>
+                            <option value="male" {{ request('league_type') === 'male' ? 'selected' : '' }}>Male</option>
+                            <option value="female" {{ request('league_type') === 'female' ? 'selected' : '' }}>Female</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Filter by Status</label>
                         <select name="status" class="form-select">
                             <option value="">All Status</option>
@@ -82,6 +90,7 @@
                                 <th>Email</th>
                                 <th>Phone</th>
                                 <th>City</th>
+                                <th>League</th>
                                 <th>Status</th>
                                 <th>Submitted</th>
                                 <th>Actions</th>
@@ -108,6 +117,7 @@
                                     <td>{{ $participant->email }}</td>
                                     <td>{{ substr($participant->mobile, -4, 4) }}... (encrypted)</td>
                                     <td>{{ $participant->city }}</td>
+                                    <td>{{ ucfirst((string) ($participant->league_type ?? 'male')) }}</td>
                                     <td>
                                         <span class="status-badge {{ $participant->status }}">
                                             {{ ucfirst($participant->status) }}

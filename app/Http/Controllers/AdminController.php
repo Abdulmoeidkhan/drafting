@@ -54,6 +54,10 @@ class AdminController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('league_type')) {
+            $query->where('league_type', (string) $request->league_type);
+        }
+
         $participants = $query->with('creator')->paginate(15);
 
         return view('admin.participants', ['participants' => $participants]);
@@ -227,6 +231,10 @@ class AdminController extends Controller
             $query->where('status', (string) $request->status);
         }
 
+        if ($request->filled('league_type')) {
+            $query->where('league_type', (string) $request->league_type);
+        }
+
         $participants = $query->orderByDesc('id')->get();
         
         $filename = 'participants_' . date('Y-m-d_H-i-s') . '.csv';
@@ -242,7 +250,7 @@ class AdminController extends Controller
             // Headers
             fputcsv($file, [
                 'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 'City', 'Nationality',
-                'Kit Size', 'Status', 'Passport Photo URL', 'Created At'
+                'League', 'Kit Size', 'Status', 'Passport Photo URL', 'Created At'
             ]);
             
             // Data
@@ -255,6 +263,7 @@ class AdminController extends Controller
                     $p->mobile,
                     $p->city,
                     $p->nationality,
+                    ucfirst((string) ($p->league_type ?? 'male')),
                     $p->kit_size,
                     $p->status,
                     $p->passport_picture ? asset('storage/' . ltrim((string) $p->passport_picture, '/')) : '',
@@ -294,6 +303,7 @@ class AdminController extends Controller
             'email' => 'required|email|unique:participants,email,' . $id,
             'dob' => 'required|date',
             'nationality' => 'required|string|max:255',
+            'league_type' => 'required|in:male,female',
             'kit_size' => 'required|in:small,medium,large,xl,xxl',
             'shirt_number' => 'required|string|max:10',
             'performance' => 'nullable|string',
