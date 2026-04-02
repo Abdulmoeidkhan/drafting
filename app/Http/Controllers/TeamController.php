@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DraftTurnChanged;
 use App\Models\Category;
 use App\Models\DraftPick;
 use App\Models\DraftRound;
+use App\Models\League;
 use App\Models\LeagueRoundConfig;
 use App\Models\Participant;
 use App\Models\Team;
@@ -15,23 +17,63 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class TeamController extends Controller
 {
     private const LEAGUE_TYPE_MALE = 'male';
+
     private const LEAGUE_TYPE_FEMALE = 'female';
+
+    private function availableLeagues()
+    {
+        return League::query()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function leagueValidationRules(bool $required = true): array
+    {
+        return [
+            $required ? 'required' : 'nullable',
+            'string',
+            'max:100',
+            Rule::exists('leagues', 'slug'),
+        ];
+    }
 
     private function normalizeLeagueType(?string $leagueType): string
     {
-        return in_array($leagueType, [self::LEAGUE_TYPE_MALE, self::LEAGUE_TYPE_FEMALE], true)
-            ? (string) $leagueType
-            : self::LEAGUE_TYPE_MALE;
+        $normalizedLeague = Str::of((string) $leagueType)->trim()->lower()->value();
+
+        $availableLeagueSlugs = League::query()
+            ->where('is_active', true)
+            ->pluck('slug')
+            ->map(fn ($slug) => (string) $slug)
+            ->filter()
+            ->values();
+
+        if ($availableLeagueSlugs->isEmpty()) {
+            return self::LEAGUE_TYPE_MALE;
+        }
+
+        return $availableLeagueSlugs->contains($normalizedLeague)
+            ? $normalizedLeague
+            : (string) $availableLeagueSlugs->first();
     }
 
     private function leagueLabel(string $leagueType): string
     {
-        return ucfirst($this->normalizeLeagueType($leagueType));
+        $normalizedLeague = $this->normalizeLeagueType($leagueType);
+
+        return (string) (League::query()->where('slug', $normalizedLeague)->value('name') ?? Str::headline($normalizedLeague));
+    }
+
+    private function broadcastTurnChanged(DraftRound $round, ?string $message = null): void
+    {
+        event(new DraftTurnChanged($round->fresh(['currentTeam']), $message));
     }
 
     /**
@@ -42,7 +84,7 @@ class TeamController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             abort(403, 'Unauthorized. Team access required.');
         }
 
@@ -51,8 +93,8 @@ class TeamController extends Controller
             ->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])
             ->first();
 
-        if (!$user->isAdmin() && !$user->hasRole('team')) {
-            if (!$team) {
+        if (! $user->isAdmin() && ! $user->hasRole('team')) {
+            if (! $team) {
                 abort(403, 'Unauthorized. Team access required.');
             }
 
@@ -64,7 +106,7 @@ class TeamController extends Controller
             }
         }
 
-        if (!$team) {
+        if (! $team) {
             abort(404, 'No team is linked to this account email.');
         }
 
@@ -119,7 +161,7 @@ class TeamController extends Controller
             ->orderByDesc('picked_at')
             ->orderByDesc('id');
 
-        if (!$user->isAdmin()) {
+        if (! $user->isAdmin()) {
             $draftActivityQuery->where('team_id', $team->id);
         }
 
@@ -131,6 +173,7 @@ class TeamController extends Controller
             'team' => $team,
             'participants' => $team->participants->where('league_type', $teamLeagueType)->values(),
             'teamLeagueType' => $teamLeagueType,
+            'teamLeagueLabel' => $this->leagueLabel($teamLeagueType),
             'activeRound' => $activeRound,
             'draftPoolParticipants' => $draftPoolParticipants,
             'teamRoundPicksCount' => $teamRoundPicksCount,
@@ -149,7 +192,7 @@ class TeamController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             abort(403, 'Unauthorized.');
         }
 
@@ -157,7 +200,7 @@ class TeamController extends Controller
             ->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])
             ->value('id');
 
-        $isTeamUser = !$user->isAdmin() && $user->hasRole('team');
+        $isTeamUser = ! $user->isAdmin() && $user->hasRole('team');
 
         $filters = $request->validate([
             'team_id' => 'nullable|integer|exists:teams,id',
@@ -173,7 +216,7 @@ class TeamController extends Controller
             ->with(['team', 'participant.category', 'round.category']);
 
         if ($isTeamUser) {
-            if (!$linkedTeamId) {
+            if (! $linkedTeamId) {
                 abort(403, 'No team account is linked to this user.');
             }
 
@@ -182,39 +225,39 @@ class TeamController extends Controller
             $filters['team_id'] = (int) $linkedTeamId;
         }
 
-        if (!empty($filters['team_id'])) {
+        if (! empty($filters['team_id'])) {
             $activityQuery->where('team_id', (int) $filters['team_id']);
         }
 
-        if (!empty($filters['round_id'])) {
+        if (! empty($filters['round_id'])) {
             $activityQuery->where('draft_round_id', (int) $filters['round_id']);
         }
 
-        if (!empty($filters['category_id'])) {
+        if (! empty($filters['category_id'])) {
             $activityQuery->whereHas('round', function ($query) use ($filters) {
                 $query->where('category_id', (int) $filters['category_id']);
             });
         }
 
-        if (!empty($filters['from'])) {
+        if (! empty($filters['from'])) {
             $activityQuery->whereDate('picked_at', '>=', $filters['from']);
         }
 
-        if (!empty($filters['to'])) {
+        if (! empty($filters['to'])) {
             $activityQuery->whereDate('picked_at', '<=', $filters['to']);
         }
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim((string) $filters['search']);
 
             $activityQuery->where(function ($query) use ($search) {
                 $query->whereHas('participant', function ($participantQuery) use ($search) {
                     $participantQuery
-                        ->where('first_name', 'like', '%' . $search . '%')
-                        ->orWhere('last_name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%');
+                        ->where('first_name', 'like', '%'.$search.'%')
+                        ->orWhere('last_name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%');
                 })->orWhereHas('team', function ($teamQuery) use ($search) {
-                    $teamQuery->where('name', 'like', '%' . $search . '%');
+                    $teamQuery->where('name', 'like', '%'.$search.'%');
                 });
             });
         }
@@ -225,7 +268,7 @@ class TeamController extends Controller
                 ->orderByDesc('id')
                 ->get();
 
-            $fileName = 'draft-activities-' . now()->format('Ymd-His') . '.csv';
+            $fileName = 'draft-activities-'.now()->format('Ymd-His').'.csv';
 
             return response()->streamDownload(function () use ($rows) {
                 $stream = fopen('php://output', 'w');
@@ -299,6 +342,7 @@ class TeamController extends Controller
      */
     public function index(Request $request)
     {
+        $availableLeagues = $this->availableLeagues()->where('is_active', true)->values();
         $activeLeagueType = $this->normalizeLeagueType((string) $request->query('league', self::LEAGUE_TYPE_MALE));
 
         $teams = Team::query()
@@ -402,6 +446,7 @@ class TeamController extends Controller
             'nextLeagueRoundNumber' => $nextLeagueRoundNumber,
             'nextLeagueRoundConfig' => $nextLeagueRoundConfig,
             'teamsById' => $teamsById,
+            'availableLeagues' => $availableLeagues,
             'activeLeagueType' => $activeLeagueType,
             'activeLeagueLabel' => $this->leagueLabel($activeLeagueType),
             'activeTab' => $request->query('tab', 'teams'),
@@ -416,20 +461,20 @@ class TeamController extends Controller
     public function startRound(Request $request)
     {
         $validated = $request->validate([
-            'league_type'           => 'required|in:male,female',
-            'category_id'           => 'required|exists:categories,id',
-            'higher_category_ids'   => 'nullable|array',
+            'league_type' => $this->leagueValidationRules(),
+            'category_id' => 'required|exists:categories,id',
+            'higher_category_ids' => 'nullable|array',
             'higher_category_ids.*' => 'integer|exists:categories,id',
-            'turn_time_seconds'     => 'required|integer|in:120,150,180,240,300',
+            'turn_time_seconds' => 'required|integer|in:120,150,180,240,300',
         ]);
 
         $leagueType = $this->normalizeLeagueType((string) $validated['league_type']);
 
         if (DraftRound::query()->where('status', 'active')->where('league_type', $leagueType)->exists()) {
-            return back()->with('error', 'Finish or close the active ' . $this->leagueLabel($leagueType) . ' draft round before starting a new one.');
+            return back()->with('error', 'Finish or close the active '.$this->leagueLabel($leagueType).' draft round before starting a new one.');
         }
 
-        $completedCount  = DraftRound::query()->where('status', 'completed')->where('league_type', $leagueType)->count();
+        $completedCount = DraftRound::query()->where('status', 'completed')->where('league_type', $leagueType)->count();
         $nextRoundNumber = $completedCount + 1;
 
         $leagueConfig = LeagueRoundConfig::query()
@@ -437,8 +482,8 @@ class TeamController extends Controller
             ->where('league_type', $leagueType)
             ->first();
 
-        if (!$leagueConfig) {
-            return back()->with('error', 'No league plan found for round ' . $nextRoundNumber . '. Configure the League Setup first.');
+        if (! $leagueConfig) {
+            return back()->with('error', 'No league plan found for round '.$nextRoundNumber.'. Configure the League Setup first.');
         }
 
         $activeTeamIds = Team::query()->where('league_type', $leagueType)->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -450,7 +495,7 @@ class TeamController extends Controller
             ->all();
 
         if (empty($pickOrder)) {
-            return back()->with('error', 'No active teams in the league plan for round ' . $nextRoundNumber . '. Update League Setup.');
+            return back()->with('error', 'No active teams in the league plan for round '.$nextRoundNumber.'. Update League Setup.');
         }
 
         $higherCategoryIds = collect($validated['higher_category_ids'] ?? [])
@@ -460,26 +505,31 @@ class TeamController extends Controller
             ->values()
             ->all();
 
-        DraftRound::create([
-            'league_type'             => $leagueType,
-            'category_id'             => (int) $validated['category_id'],
-            'start_team_id'           => $pickOrder[0],
-            'current_team_id'         => $pickOrder[0],
-            'pick_order'              => $pickOrder,
-            'higher_category_ids'     => $higherCategoryIds,
-            'picks_per_team'          => 1,
-            'turn_time_seconds'       => (int) $validated['turn_time_seconds'],
-            'current_pick_number'     => 1,
-            'total_picks_planned'     => count($pickOrder),
+        $round = DraftRound::create([
+            'league_type' => $leagueType,
+            'category_id' => (int) $validated['category_id'],
+            'start_team_id' => $pickOrder[0],
+            'current_team_id' => $pickOrder[0],
+            'pick_order' => $pickOrder,
+            'higher_category_ids' => $higherCategoryIds,
+            'picks_per_team' => 1,
+            'turn_time_seconds' => (int) $validated['turn_time_seconds'],
+            'current_pick_number' => 1,
+            'total_picks_planned' => count($pickOrder),
             'current_turn_started_at' => now(),
-            'status'                  => 'active',
+            'status' => 'active',
         ]);
+
+        $this->broadcastTurnChanged(
+            $round,
+            'Round '.$nextRoundNumber.' started. '.($round->currentTeam?->name ?? 'The first team').' is now on the clock.'
+        );
 
         return redirect()->route('admin.teams', [
             'tab' => 'draft',
             'league' => $leagueType,
             'category' => (string) $validated['category_id'],
-        ])->with('success', 'Round ' . $nextRoundNumber . ' started. Pick order set from league plan.');
+        ])->with('success', 'Round '.$nextRoundNumber.' started. Pick order set from league plan.');
     }
 
     /**
@@ -490,7 +540,7 @@ class TeamController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             abort(403, 'Unauthorized.');
         }
 
@@ -507,6 +557,7 @@ class TeamController extends Controller
 
             if ($this->isTurnExpired($lockedRound)) {
                 $this->advanceTurnOrComplete($lockedRound);
+
                 return ['error' => 'Turn time expired. Turn has been auto-skipped to the next team.'];
             }
 
@@ -526,7 +577,7 @@ class TeamController extends Controller
 
             $eligibleCategoryIds = $this->getEligibleCategoryIds($lockedRound);
 
-            if ($lockedParticipant->category_id === null || !in_array((int) $lockedParticipant->category_id, $eligibleCategoryIds, true)) {
+            if ($lockedParticipant->category_id === null || ! in_array((int) $lockedParticipant->category_id, $eligibleCategoryIds, true)) {
                 return ['error' => 'This player is not eligible for the active draft round category rules.'];
             }
 
@@ -536,7 +587,7 @@ class TeamController extends Controller
                 return ['error' => 'Current round team league does not match the active round league.'];
             }
 
-            if (!$user->isAdmin() && (int) $linkedTeamId !== (int) $currentTeam->id) {
+            if (! $user->isAdmin() && (int) $linkedTeamId !== (int) $currentTeam->id) {
                 return ['error' => 'It is not your team turn to pick right now.'];
             }
 
@@ -575,7 +626,12 @@ class TeamController extends Controller
                     'current_turn_started_at' => null,
                 ]);
 
-                $nextStarted = $this->autoStartNextRound($lockedRound);
+                $completedRound = $lockedRound->fresh(['currentTeam']);
+                $nextStarted = $this->autoStartNextRound($completedRound);
+                $this->broadcastTurnChanged(
+                    $completedRound,
+                    $nextStarted ? 'Round completed. The next round has started.' : 'Round completed.'
+                );
 
                 return ['success' => $nextStarted
                     ? 'Pick completed. Round finished — next round started automatically.'
@@ -587,6 +643,12 @@ class TeamController extends Controller
                 'current_pick_number' => (int) $lockedRound->current_pick_number + 1,
                 'current_turn_started_at' => now(),
             ]);
+
+            $nextRoundState = $lockedRound->fresh(['currentTeam']);
+            $this->broadcastTurnChanged(
+                $nextRoundState,
+                ($nextRoundState->currentTeam?->name ?? 'The next team').' is now on the clock.'
+            );
 
             return ['success' => 'Pick completed successfully.'];
         });
@@ -614,7 +676,7 @@ class TeamController extends Controller
                 ];
             }
 
-            if (!$this->isTurnExpired($lockedRound)) {
+            if (! $this->isTurnExpired($lockedRound)) {
                 return [
                     'advanced' => false,
                     'round_closed' => false,
@@ -626,7 +688,7 @@ class TeamController extends Controller
 
             return [
                 'advanced' => $advanced,
-                'round_closed' => !$advanced,
+                'round_closed' => ! $advanced,
                 'message' => $advanced
                     ? 'Turn expired and moved to next team.'
                     : 'Turn expired and round completed.',
@@ -651,6 +713,8 @@ class TeamController extends Controller
             'current_turn_started_at' => null,
         ]);
 
+        $this->broadcastTurnChanged($round, 'Draft round closed successfully.');
+
         return back()->with('success', 'Draft round closed successfully.');
     }
 
@@ -660,16 +724,16 @@ class TeamController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255|unique:teams,name',
-            'short_code'   => 'nullable|string|max:10|unique:teams,short_code',
+            'name' => 'required|string|max:255|unique:teams,name',
+            'short_code' => 'nullable|string|max:10|unique:teams,short_code',
             'captain_name' => 'nullable|string|max:255',
-            'email'        => 'required|email|max:255|unique:teams,email',
-            'league_type'  => 'required|in:male,female',
-            'logo'         => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'color'        => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'email' => 'required|email|max:255|unique:teams,email',
+            'league_type' => $this->leagueValidationRules(),
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
-        $validated['color']       = $validated['color'] ?? '#6c757d';
+        $validated['color'] = $validated['color'] ?? '#6c757d';
         $validated['max_players'] = LeagueRoundConfig::query()->where('league_type', $validated['league_type'])->count() ?: 16;
 
         $existingUser = User::query()->where('email', $validated['email'])->first();
@@ -686,7 +750,7 @@ class TeamController extends Controller
 
         $accountResult = $this->ensureTeamUserAccount($validated['name'], $validated['email']);
 
-        if (!empty($accountResult['blocked'])) {
+        if (! empty($accountResult['blocked'])) {
             return back()->with('error', $accountResult['message']);
         }
 
@@ -709,16 +773,16 @@ class TeamController extends Controller
     public function update(Request $request, Team $team)
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255|unique:teams,name,' . $team->id,
-            'short_code'   => 'nullable|string|max:10|unique:teams,short_code,' . $team->id,
+            'name' => 'required|string|max:255|unique:teams,name,'.$team->id,
+            'short_code' => 'nullable|string|max:10|unique:teams,short_code,'.$team->id,
             'captain_name' => 'nullable|string|max:255',
-            'email'        => 'required|email|max:255|unique:teams,email,' . $team->id,
-            'league_type'  => 'required|in:male,female',
-            'logo'         => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'color'        => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'email' => 'required|email|max:255|unique:teams,email,'.$team->id,
+            'league_type' => $this->leagueValidationRules(),
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
-        $validated['color']       = $validated['color'] ?? $team->color ?? '#6c757d';
+        $validated['color'] = $validated['color'] ?? $team->color ?? '#6c757d';
         $validated['max_players'] = LeagueRoundConfig::query()->where('league_type', $validated['league_type'])->count() ?: $team->max_players;
 
         if ($request->hasFile('logo')) {
@@ -733,7 +797,7 @@ class TeamController extends Controller
 
         $accountResult = $this->ensureTeamUserAccount($validated['name'], $validated['email']);
 
-        if (!empty($accountResult['blocked'])) {
+        if (! empty($accountResult['blocked'])) {
             return back()->with('error', $accountResult['message']);
         }
 
@@ -915,7 +979,7 @@ class TeamController extends Controller
             ];
         }
 
-        $plainPassword = 'Team@' . Str::upper(Str::random(8)) . random_int(10, 99);
+        $plainPassword = 'Team@'.Str::upper(Str::random(8)).random_int(10, 99);
 
         $user = User::create([
             'name' => $teamName,
@@ -939,7 +1003,7 @@ class TeamController extends Controller
      */
     private function isTurnExpired(DraftRound $round): bool
     {
-        if (!$round->current_turn_started_at) {
+        if (! $round->current_turn_started_at) {
             return false;
         }
 
@@ -961,7 +1025,9 @@ class TeamController extends Controller
                 'current_turn_started_at' => null,
             ]);
 
-            $this->autoStartNextRound($round);
+            $completedRound = $round->fresh(['currentTeam']);
+            $this->autoStartNextRound($completedRound);
+            $this->broadcastTurnChanged($completedRound, 'Turn expired and the round has been completed.');
 
             return false;
         }
@@ -971,6 +1037,12 @@ class TeamController extends Controller
             'current_pick_number' => (int) $round->current_pick_number + 1,
             'current_turn_started_at' => now(),
         ]);
+
+        $updatedRound = $round->fresh(['currentTeam']);
+        $this->broadcastTurnChanged(
+            $updatedRound,
+            ($updatedRound->currentTeam?->name ?? 'The next team').' is now on the clock.'
+        );
 
         return true;
     }
@@ -989,7 +1061,7 @@ class TeamController extends Controller
         $leagueType = $this->normalizeLeagueType((string) $completedRound->league_type);
 
         // Count includes the round just marked 'completed'.
-        $completedCount  = DraftRound::query()->where('status', 'completed')->where('league_type', $leagueType)->count();
+        $completedCount = DraftRound::query()->where('status', 'completed')->where('league_type', $leagueType)->count();
         $nextRoundNumber = $completedCount + 1;
 
         $leagueConfig = LeagueRoundConfig::query()
@@ -997,7 +1069,7 @@ class TeamController extends Controller
             ->where('league_type', $leagueType)
             ->first();
 
-        if (!$leagueConfig) {
+        if (! $leagueConfig) {
             return false;
         }
 
@@ -1013,22 +1085,51 @@ class TeamController extends Controller
             return false;
         }
 
-        DraftRound::create([
-            'league_type'             => $leagueType,
-            'category_id'             => $completedRound->category_id,
-            'start_team_id'           => $pickOrder[0],
-            'current_team_id'         => $pickOrder[0],
-            'pick_order'              => $pickOrder,
-            'higher_category_ids'     => $completedRound->higher_category_ids,
-            'picks_per_team'          => 1,
-            'turn_time_seconds'       => $completedRound->turn_time_seconds,
-            'current_pick_number'     => 1,
-            'total_picks_planned'     => count($pickOrder),
+        $nextRound = DraftRound::create([
+            'league_type' => $leagueType,
+            'category_id' => $completedRound->category_id,
+            'start_team_id' => $pickOrder[0],
+            'current_team_id' => $pickOrder[0],
+            'pick_order' => $pickOrder,
+            'higher_category_ids' => $completedRound->higher_category_ids,
+            'picks_per_team' => 1,
+            'turn_time_seconds' => $completedRound->turn_time_seconds,
+            'current_pick_number' => 1,
+            'total_picks_planned' => count($pickOrder),
             'current_turn_started_at' => now(),
-            'status'                  => 'active',
+            'status' => 'active',
         ]);
 
+        $this->broadcastTurnChanged(
+            $nextRound,
+            'Round '.$nextRoundNumber.' started automatically. '.($nextRound->currentTeam?->name ?? 'The next team').' is now on the clock.'
+        );
+
         return true;
+    }
+
+    /**
+     * Create a new active league that can be used for teams, participants, and draft rounds.
+     */
+    public function storeLeague(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:leagues,name',
+            'slug' => ['required', 'string', 'max:100', 'alpha_dash:ascii', 'unique:leagues,slug'],
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $league = League::query()->create([
+            'name' => trim((string) $validated['name']),
+            'slug' => Str::lower(trim((string) $validated['slug'])),
+            'description' => $validated['description'] ?? null,
+            'is_active' => true,
+            'sort_order' => ((int) League::query()->max('sort_order')) + 1,
+        ]);
+
+        return redirect()
+            ->route('admin.teams', ['tab' => 'league-setup', 'league' => $league->slug])
+            ->with('success', $league->name.' league created successfully.');
     }
 
     /**
@@ -1040,9 +1141,9 @@ class TeamController extends Controller
     public function saveLeagueSetup(Request $request)
     {
         $validated = $request->validate([
-            'league_type'    => 'required|in:male,female',
-            'max_players'    => 'required|integer|min:1|max:99',
-            'round1_order'   => 'required|array',
+            'league_type' => $this->leagueValidationRules(),
+            'max_players' => 'required|integer|min:1|max:99',
+            'round1_order' => 'required|array',
             'round1_order.*' => 'required|integer|exists:teams,id',
         ]);
 
@@ -1058,7 +1159,7 @@ class TeamController extends Controller
             ->all();
 
         if (count($teamIds) === 0) {
-            return back()->with('error', 'Create at least one ' . $this->leagueLabel($leagueType) . ' team before setting up that league.');
+            return back()->with('error', 'Create at least one '.$this->leagueLabel($leagueType).' team before setting up that league.');
         }
 
         $submittedOrder = collect($validated['round1_order'])
@@ -1073,7 +1174,7 @@ class TeamController extends Controller
             return back()->withInput()->with('error', 'Round 1 order must include every team exactly once.');
         }
 
-        $maxPlayers  = (int) $validated['max_players'];
+        $maxPlayers = (int) $validated['max_players'];
         $round1Order = $submittedOrder;
 
         DB::transaction(function () use ($leagueType, $maxPlayers, $round1Order) {
@@ -1083,8 +1184,8 @@ class TeamController extends Controller
 
             for ($roundNum = 1; $roundNum <= $maxPlayers; $roundNum++) {
                 LeagueRoundConfig::create([
-                    'league_type'     => $leagueType,
-                    'round_number'    => $roundNum,
+                    'league_type' => $leagueType,
+                    'round_number' => $roundNum,
                     'team_pick_order' => $currentOrder,
                     'is_manually_set' => $roundNum === 1,
                 ]);
@@ -1102,7 +1203,7 @@ class TeamController extends Controller
 
         return redirect()
             ->route('admin.teams', ['tab' => 'league-setup', 'league' => $leagueType])
-            ->with('success', $this->leagueLabel($leagueType) . " league setup saved: {$maxPlayers} rounds / {$maxPlayers} max players per team.");
+            ->with('success', $this->leagueLabel($leagueType)." league setup saved: {$maxPlayers} rounds / {$maxPlayers} max players per team.");
     }
 
     /**
@@ -1113,7 +1214,7 @@ class TeamController extends Controller
     public function updateLeagueRound(Request $request, int $roundNumber)
     {
         $validated = $request->validate([
-            'league_type' => 'required|in:male,female',
+            'league_type' => $this->leagueValidationRules(),
             'first_team_id' => 'required|exists:teams,id',
         ]);
 
@@ -1125,8 +1226,8 @@ class TeamController extends Controller
             ->where('league_type', $leagueType)
             ->exists();
 
-        if (!$teamExistsInLeague) {
-            return back()->with('error', 'The selected team does not belong to the ' . $this->leagueLabel($leagueType) . ' league.');
+        if (! $teamExistsInLeague) {
+            return back()->with('error', 'The selected team does not belong to the '.$this->leagueLabel($leagueType).' league.');
         }
 
         $config = LeagueRoundConfig::query()
@@ -1153,7 +1254,7 @@ class TeamController extends Controller
     public function clearLeagueSetup(Request $request)
     {
         $validated = $request->validate([
-            'league_type' => 'required|in:male,female',
+            'league_type' => $this->leagueValidationRules(),
         ]);
 
         $leagueType = $this->normalizeLeagueType((string) $validated['league_type']);
@@ -1162,6 +1263,6 @@ class TeamController extends Controller
 
         return redirect()
             ->route('admin.teams', ['tab' => 'league-setup', 'league' => $leagueType])
-            ->with('success', $this->leagueLabel($leagueType) . ' league setup cleared.');
+            ->with('success', $this->leagueLabel($leagueType).' league setup cleared.');
     }
 }

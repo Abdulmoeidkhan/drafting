@@ -9,6 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('assets/css/admin-teams.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
+    @vite(['resources/js/app.js'])
 </head>
 <body>
     @include('partials.portal-navbar')
@@ -19,8 +20,12 @@
             <p>Teams are managed here and players can only be assigned through drafting.</p>
             <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                 <span class="badge text-bg-dark">Active League: {{ $activeLeagueLabel }}</span>
-                <a href="{{ route('admin.teams', ['tab' => $activeTab, 'category' => $activeDraftCategory, 'league' => 'male']) }}" class="btn btn-sm {{ $activeLeagueType === 'male' ? 'btn-primary' : 'btn-outline-primary' }}">Male League</a>
-                <a href="{{ route('admin.teams', ['tab' => $activeTab, 'category' => $activeDraftCategory, 'league' => 'female']) }}" class="btn btn-sm {{ $activeLeagueType === 'female' ? 'btn-primary' : 'btn-outline-primary' }}">Female League</a>
+                @foreach(($availableLeagues ?? collect()) as $league)
+                    <a href="{{ route('admin.teams', ['tab' => $activeTab, 'category' => $activeDraftCategory, 'league' => $league->slug]) }}"
+                       class="btn btn-sm {{ $activeLeagueType === $league->slug ? 'btn-primary' : 'btn-outline-primary' }}">
+                        {{ $league->name }}
+                    </a>
+                @endforeach
             </div>
         </div>
 
@@ -732,6 +737,60 @@
                                 @endif
                             </div>
 
+                            <div class="row g-4 mb-4">
+                                <div class="col-lg-4">
+                                    <div class="sub-card h-100">
+                                        <h5><i class="bi bi-diagram-3"></i> Create League</h5>
+                                        <form method="POST" action="{{ route('admin.leagues.store') }}">
+                                            @csrf
+                                            <div class="mb-3">
+                                                <label class="form-label">League Name</label>
+                                                <input class="form-control" name="name" placeholder="e.g. Legends League" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">League Slug</label>
+                                                <input class="form-control" name="slug" placeholder="e.g. legends" required>
+                                                <div class="form-text">Use lowercase letters, numbers, and dashes only.</div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Description</label>
+                                                <textarea class="form-control" name="description" rows="3" placeholder="Optional"></textarea>
+                                            </div>
+                                            <button class="btn btn-primary w-100" type="submit">Create League</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="col-lg-8">
+                                    <div class="sub-card h-100">
+                                        <h5><i class="bi bi-list-stars"></i> Available Leagues</h5>
+                                        <div class="table-responsive">
+                                            <table class="table align-middle mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Slug</th>
+                                                        <th>Description</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @forelse(($availableLeagues ?? collect()) as $league)
+                                                        <tr>
+                                                            <td><strong>{{ $league->name }}</strong></td>
+                                                            <td><code>{{ $league->slug }}</code></td>
+                                                            <td>{{ $league->description ?: '—' }}</td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="3" class="text-center text-muted py-3">No leagues available yet.</td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             @if($teams->count() === 0)
                                 <div class="alert alert-warning mb-0">
                                     <i class="bi bi-exclamation-triangle"></i> Create at least one team before setting up league rounds.
@@ -964,8 +1023,9 @@
                         <div class="mb-3">
                             <label class="form-label">League</label>
                             <select class="form-select" id="edit_team_league_type" name="league_type" required>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
+                                @foreach(($availableLeagues ?? collect()) as $league)
+                                    <option value="{{ $league->slug }}">{{ $league->name }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div class="mb-3">
@@ -1019,6 +1079,16 @@
         </div>
     </div>
 
+    @php
+        $adminBroadcastDriver = config('broadcasting.default');
+        $adminBroadcastConnection = in_array($adminBroadcastDriver, ['reverb', 'pusher'], true)
+            ? (array) config('broadcasting.connections.' . $adminBroadcastDriver, [])
+            : [];
+        $adminBroadcastConfig = [
+            'enabled' => !empty($adminBroadcastConnection['key']),
+            'channel' => 'draft.league.' . ($activeLeagueType ?? 'male'),
+        ];
+    @endphp
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     <script>
@@ -1181,11 +1251,28 @@
 
             const draftCategoryButton = document.querySelector('[data-category-key="' + activeDraftCategory + '"]');
             const fallbackDraftCategoryButton = document.querySelector('#draftCategoryTabs .nav-link');
+            const adminBroadcastConfig = @json($adminBroadcastConfig);
+            const shouldAutoRefreshDraft = activeTopTab === 'draft';
 
             if (draftCategoryButton) {
                 bootstrap.Tab.getOrCreateInstance(draftCategoryButton).show();
             } else if (fallbackDraftCategoryButton) {
                 bootstrap.Tab.getOrCreateInstance(fallbackDraftCategoryButton).show();
+            }
+
+            if (shouldAutoRefreshDraft && !adminBroadcastConfig.enabled) {
+                setInterval(function () {
+                    if (document.visibilityState === 'visible') {
+                        window.location.reload();
+                    }
+                }, 15000);
+            }
+
+            if (shouldAutoRefreshDraft && adminBroadcastConfig.enabled && window.Echo) {
+                window.Echo.channel(adminBroadcastConfig.channel)
+                    .listen('.draft.turn.changed', function () {
+                        window.location.reload();
+                    });
             }
         });
     </script>

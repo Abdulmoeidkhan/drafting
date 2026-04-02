@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\League;
 use App\Models\Participant;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ParticipantFormController extends Controller
 {
@@ -14,7 +17,22 @@ class ParticipantFormController extends Controller
      */
     public function index()
     {
-        return view('participant_form');
+        $leagues = collect([
+            (object) ['slug' => 'male', 'name' => 'KTPL (Mens League)'],
+            (object) ['slug' => 'female', 'name' => 'WTPL (Women League)'],
+        ]);
+
+        if (Schema::hasTable('leagues')) {
+            $configuredLeagues = League::query()->active()->get();
+
+            if ($configuredLeagues->isNotEmpty()) {
+                $leagues = $configuredLeagues;
+            }
+        }
+
+        return view('participant_form', [
+            'leagues' => $leagues,
+        ]);
     }
 
     /**
@@ -40,7 +58,7 @@ class ParticipantFormController extends Controller
                 'email' => 'required|email|unique:participants,email',
                 'dob' => 'required|date',
                 'nationality' => 'required|string|max:255|not_in:India,Israel',
-                'league_type' => 'required|in:male,female',
+                'league_type' => ['required', 'string', Rule::exists('leagues', 'slug')->where(fn ($query) => $query->where('is_active', true))],
                 'identity' => 'required|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'required|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'required|string|max:10',
@@ -54,7 +72,7 @@ class ParticipantFormController extends Controller
                 'checkin' => 'required_unless:nationality,Pakistan|date',
                 'checkout' => 'required_unless:nationality,Pakistan|date',
             ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -66,7 +84,7 @@ class ParticipantFormController extends Controller
             // Handle passport picture upload
             if ($request->hasFile('passport_picture')) {
                 $file = $request->file('passport_picture');
-                $filename = time() . '_passport_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $filename = time().'_passport_'.uniqid().'.'.$file->getClientOriginalExtension();
                 $path = $file->storeAs('passports', $filename, 'public');
                 $validated['passport_picture'] = $path;
             }
@@ -74,7 +92,7 @@ class ParticipantFormController extends Controller
             // Handle ID picture upload
             if ($request->hasFile('id_picture')) {
                 $file = $request->file('id_picture');
-                $filename = time() . '_id_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $filename = time().'_id_'.uniqid().'.'.$file->getClientOriginalExtension();
                 $path = $file->storeAs('ids', $filename, 'public');
                 $validated['id_picture'] = $path;
             }
@@ -82,7 +100,7 @@ class ParticipantFormController extends Controller
             // Handle hotel reservation upload
             if ($request->hasFile('hotel_reservation')) {
                 $file = $request->file('hotel_reservation');
-                $filename = time() . '_hotel_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $filename = time().'_hotel_'.uniqid().'.'.$file->getClientOriginalExtension();
                 $path = $file->storeAs('documents/hotel', $filename, 'public');
                 $validated['hotel_reservation'] = $path;
             }
@@ -90,7 +108,7 @@ class ParticipantFormController extends Controller
             // Handle flight reservation upload
             if ($request->hasFile('flight_reservation')) {
                 $file = $request->file('flight_reservation');
-                $filename = time() . '_flight_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $filename = time().'_flight_'.uniqid().'.'.$file->getClientOriginalExtension();
                 $path = $file->storeAs('documents/flight', $filename, 'public');
                 $validated['flight_reservation'] = $path;
             }
@@ -104,20 +122,20 @@ class ParticipantFormController extends Controller
             // Send confirmation email
             try {
                 Mail::raw(
-                    "Hello {$participant->full_name},\n\n" .
-                    "Your registration has been submitted successfully.\n" .
-                    "Status: Pending Admin Approval\n\n" .
-                    "We will review your submission and send you a confirmation email soon.\n\n" .
-                    "Best regards,\n" .
-                    "Participant Management Team",
+                    "Hello {$participant->full_name},\n\n".
+                    "Your registration has been submitted successfully.\n".
+                    "Status: Pending Admin Approval\n\n".
+                    "We will review your submission and send you a confirmation email soon.\n\n".
+                    "Best regards,\n".
+                    'Participant Management Team',
                     function ($message) use ($participant) {
                         $message->to($participant->email)
-                                ->subject('Registration Confirmation - Participant Management System');
+                            ->subject('Registration Confirmation - Participant Management System');
                     }
                 );
             } catch (\Exception $e) {
                 // Log email error but don't fail the request
-                \Log::error('Email sending failed: ' . $e->getMessage());
+                \Log::error('Email sending failed: '.$e->getMessage());
             }
 
             return response()->json([
@@ -129,7 +147,7 @@ class ParticipantFormController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error submitting form: ' . $e->getMessage(),
+                'message' => 'Error submitting form: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -140,8 +158,8 @@ class ParticipantFormController extends Controller
     public function getStatus($id)
     {
         $participant = Participant::find($id);
-        
-        if (!$participant) {
+
+        if (! $participant) {
             return response()->json(['error' => 'Participant not found'], 404);
         }
 

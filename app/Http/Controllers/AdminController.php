@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Participant;
-use App\Models\User;
 use App\Models\Category;
+use App\Models\League;
+use App\Models\Participant;
 use App\Models\Team;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminController extends Controller
 {
@@ -60,7 +61,10 @@ class AdminController extends Controller
 
         $participants = $query->with('creator')->paginate(15);
 
-        return view('admin.participants', ['participants' => $participants]);
+        return view('admin.participants', [
+            'participants' => $participants,
+            'leagues' => League::query()->active()->get(),
+        ]);
     }
 
     /**
@@ -69,6 +73,7 @@ class AdminController extends Controller
     public function viewParticipant($id)
     {
         $participant = Participant::with('creator')->findOrFail($id);
+
         return view('admin.participant-detail', ['participant' => $participant]);
     }
 
@@ -82,7 +87,7 @@ class AdminController extends Controller
 
         $accountResult = $this->ensureParticipantUserAccount($participant);
 
-        if (!empty($accountResult['blocked'])) {
+        if (! empty($accountResult['blocked'])) {
             return back()->with('success', 'Participant approved, but no player login was created because this email belongs to an admin account.');
         }
 
@@ -120,7 +125,7 @@ class AdminController extends Controller
 
         return back()->with('success', 'Participant deleted successfully');
     }
-    
+
     /**
      * Manage users
      */
@@ -159,7 +164,7 @@ class AdminController extends Controller
             'created_by_admin' => true,
         ]);
 
-        if (!empty($selectedRoles)) {
+        if (! empty($selectedRoles)) {
             $user->syncRoles($selectedRoles);
         }
 
@@ -172,10 +177,10 @@ class AdminController extends Controller
     public function editUser($id, Request $request)
     {
         $user = User::findOrFail($id);
-        
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
+            'email' => 'required|email|unique:users,email,'.$id,
             'roles' => 'nullable|array',
             'roles.*' => 'exists:roles,name',
         ]);
@@ -183,7 +188,7 @@ class AdminController extends Controller
         $selectedRoles = $validated['roles'] ?? [];
         $isAdmin = in_array('admin', $selectedRoles, true);
 
-        if ($user->id === Auth::id() && !$isAdmin) {
+        if ($user->id === Auth::id() && ! $isAdmin) {
             return back()->with('error', 'You cannot remove your own admin role');
         }
 
@@ -236,23 +241,23 @@ class AdminController extends Controller
         }
 
         $participants = $query->orderByDesc('id')->get();
-        
-        $filename = 'participants_' . date('Y-m-d_H-i-s') . '.csv';
-        
+
+        $filename = 'participants_'.date('Y-m-d_H-i-s').'.csv';
+
         $headers = [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ];
 
-        $callback = function() use ($participants) {
+        $callback = function () use ($participants) {
             $file = fopen('php://output', 'w');
-            
+
             // Headers
             fputcsv($file, [
                 'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 'City', 'Nationality',
-                'League', 'Kit Size', 'Status', 'Passport Photo URL', 'Created At'
+                'League', 'Kit Size', 'Status', 'Passport Photo URL', 'Created At',
             ]);
-            
+
             // Data
             foreach ($participants as $p) {
                 fputcsv($file, [
@@ -266,11 +271,11 @@ class AdminController extends Controller
                     ucfirst((string) ($p->league_type ?? 'male')),
                     $p->kit_size,
                     $p->status,
-                    $p->passport_picture ? asset('storage/' . ltrim((string) $p->passport_picture, '/')) : '',
+                    $p->passport_picture ? asset('storage/'.ltrim((string) $p->passport_picture, '/')) : '',
                     $p->created_at->format('Y-m-d H:i:s'),
                 ]);
             }
-            
+
             fclose($file);
         };
 
@@ -284,7 +289,13 @@ class AdminController extends Controller
     {
         $participant = Participant::findOrFail($id);
         $categories = Category::all();
-        return view('admin.participant-edit', ['participant' => $participant, 'categories' => $categories]);
+        $leagues = League::query()->active()->get();
+
+        return view('admin.participant-edit', [
+            'participant' => $participant,
+            'categories' => $categories,
+            'leagues' => $leagues,
+        ]);
     }
 
     /**
@@ -300,10 +311,10 @@ class AdminController extends Controller
             'nick_name' => 'required|string|max:255',
             'city' => 'required|string|max:255',
             'address' => 'required|string',
-            'email' => 'required|email|unique:participants,email,' . $id,
+            'email' => 'required|email|unique:participants,email,'.$id,
             'dob' => 'required|date',
             'nationality' => 'required|string|max:255',
-            'league_type' => 'required|in:male,female',
+            'league_type' => ['required', 'string', Rule::exists('leagues', 'slug')],
             'kit_size' => 'required|in:small,medium,large,xl,xxl',
             'shirt_number' => 'required|string|max:10',
             'performance' => 'nullable|string',
@@ -340,6 +351,7 @@ class AdminController extends Controller
         ]);
 
         Category::create($validated);
+
         return back()->with('success', 'Category created successfully');
     }
 
@@ -351,7 +363,7 @@ class AdminController extends Controller
         $category = Category::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,' . $id,
+            'name' => 'required|string|max:255|unique:categories,name,'.$id,
             'description' => 'nullable|string',
         ]);
 
@@ -367,6 +379,7 @@ class AdminController extends Controller
     {
         $category = Category::findOrFail($id);
         $category->delete();
+
         return back()->with('success', 'Category deleted successfully. Linked players are now uncategorized.');
     }
 
@@ -376,7 +389,7 @@ class AdminController extends Controller
     public function downloadFile($participantId, $fileType)
     {
         $participant = Participant::findOrFail($participantId);
-        
+
         $fileMap = [
             'passport' => 'passport_picture',
             'id' => 'id_picture',
@@ -384,30 +397,30 @@ class AdminController extends Controller
             'flight' => 'flight_reservation',
         ];
 
-        if (!isset($fileMap[$fileType])) {
+        if (! isset($fileMap[$fileType])) {
             abort(404, 'File type not found');
         }
 
         $field = $fileMap[$fileType];
         $filePath = $participant->$field;
 
-        if (!$filePath || !Storage::disk('public')->exists($filePath)) {
+        if (! $filePath || ! Storage::disk('public')->exists($filePath)) {
             abort(404, 'File not found');
         }
 
         // Generate meaningful filename
         $fileNameMap = [
-            'passport_picture' => 'Passport_Photo_' . $participant->id . '_' . $participant->full_name,
-            'id_picture' => 'ID_Picture_' . $participant->id . '_' . $participant->full_name,
-            'hotel_reservation' => 'Hotel_Reservation_' . $participant->id . '_' . $participant->full_name,
-            'flight_reservation' => 'Flight_Reservation_' . $participant->id . '_' . $participant->full_name,
+            'passport_picture' => 'Passport_Photo_'.$participant->id.'_'.$participant->full_name,
+            'id_picture' => 'ID_Picture_'.$participant->id.'_'.$participant->full_name,
+            'hotel_reservation' => 'Hotel_Reservation_'.$participant->id.'_'.$participant->full_name,
+            'flight_reservation' => 'Flight_Reservation_'.$participant->id.'_'.$participant->full_name,
         ];
 
         $fileName = $fileNameMap[$field] ?? basename($filePath);
         $originalFileName = basename($filePath);
         $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
 
-        return Storage::disk('public')->download($filePath, $fileName . '.' . $fileExtension);
+        return Storage::disk('public')->download($filePath, $fileName.'.'.$fileExtension);
     }
 
     /**
@@ -416,7 +429,7 @@ class AdminController extends Controller
     public function previewFile($participantId, $fileType)
     {
         $participant = Participant::findOrFail($participantId);
-        
+
         $fileMap = [
             'passport' => 'passport_picture',
             'id' => 'id_picture',
@@ -424,14 +437,14 @@ class AdminController extends Controller
             'flight' => 'flight_reservation',
         ];
 
-        if (!isset($fileMap[$fileType])) {
+        if (! isset($fileMap[$fileType])) {
             abort(404, 'File type not found');
         }
 
         $field = $fileMap[$fileType];
         $filePath = $participant->$field;
 
-        if (!$filePath || !Storage::disk('public')->exists($filePath)) {
+        if (! $filePath || ! Storage::disk('public')->exists($filePath)) {
             abort(404, 'File not found');
         }
 
@@ -444,7 +457,7 @@ class AdminController extends Controller
     private function ensureParticipantUserAccount(Participant $participant): array
     {
         $email = (string) $participant->email;
-        $displayName = trim($participant->first_name . ' ' . $participant->last_name);
+        $displayName = trim($participant->first_name.' '.$participant->last_name);
         $displayName = $displayName !== '' ? $displayName : ($participant->nick_name ?: 'Player');
 
         $user = User::query()->where('email', $email)->first();
@@ -472,7 +485,7 @@ class AdminController extends Controller
             ];
         }
 
-        $plainPassword = 'Player@' . Str::upper(Str::random(8)) . random_int(10, 99);
+        $plainPassword = 'Player@'.Str::upper(Str::random(8)).random_int(10, 99);
 
         $user = User::create([
             'name' => $displayName,
@@ -490,5 +503,4 @@ class AdminController extends Controller
             'password' => $plainPassword,
         ];
     }
-
 }

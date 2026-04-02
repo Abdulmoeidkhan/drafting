@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\League;
 use App\Models\Participant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ParticipantController extends Controller
@@ -23,12 +25,12 @@ class ParticipantController extends Controller
 
         if ($search) {
             $query->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('city', 'like', "%{$search}%");
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('city', 'like', "%{$search}%");
         }
 
-        if (in_array($leagueType, ['male', 'female'], true)) {
-            $query->where('league_type', $leagueType);
+        if ($leagueType && League::query()->where('slug', (string) $leagueType)->exists()) {
+            $query->where('league_type', (string) $leagueType);
         }
 
         $participants = $query->paginate($perPage);
@@ -43,7 +45,7 @@ class ParticipantController extends Controller
     {
         $participant = Participant::find($id);
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json(['error' => 'Participant not found'], Response::HTTP_NOT_FOUND);
         }
 
@@ -70,7 +72,7 @@ class ParticipantController extends Controller
                 'email' => 'required|email|unique:participants,email',
                 'dob' => 'required|date',
                 'nationality' => 'required|string',
-                'league_type' => 'required|in:male,female',
+                'league_type' => ['required', 'string', Rule::exists('leagues', 'slug')],
                 'identity' => 'required|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'required|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'required|string|max:10',
@@ -83,7 +85,7 @@ class ParticipantController extends Controller
             ]);
 
             // Validate mobile and identity
-            if (!Participant::validateMobile($validated['mobile'])) {
+            if (! Participant::validateMobile($validated['mobile'])) {
                 throw ValidationException::withMessages([
                     'mobile' => 'Mobile number must be 10-15 digits',
                 ]);
@@ -92,7 +94,7 @@ class ParticipantController extends Controller
             // Handle file upload
             if ($request->hasFile('passport_picture')) {
                 $file = $request->file('passport_picture');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('passports', $filename, 'public');
                 $validated['passport_picture'] = $path;
             }
@@ -100,11 +102,10 @@ class ParticipantController extends Controller
             // Handle file upload
             if ($request->hasFile('id_picture')) {
                 $file = $request->file('id_picture');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('ids', $filename, 'public');
                 $validated['id_picture'] = $path;
             }
-
 
             $participant = Participant::create($validated);
 
@@ -122,7 +123,7 @@ class ParticipantController extends Controller
         try {
             $participant = Participant::find($id);
 
-            if (!$participant) {
+            if (! $participant) {
                 return response()->json(['error' => 'Participant not found'], Response::HTTP_NOT_FOUND);
             }
 
@@ -137,10 +138,10 @@ class ParticipantController extends Controller
                 'city' => 'nullable|string|max:255',
                 'address' => 'nullable|string',
                 'mobile' => 'nullable|string',
-                'email' => 'nullable|email|unique:participants,email,' . $id,
+                'email' => 'nullable|email|unique:participants,email,'.$id,
                 'dob' => 'nullable|date',
                 'nationality' => 'nullable|string',
-                'league_type' => 'nullable|in:male,female',
+                'league_type' => ['nullable', 'string', Rule::exists('leagues', 'slug')],
                 'identity' => 'nullable|string|regex:/^[a-zA-Z0-9]{9,14}$/',
                 'kit_size' => 'nullable|in:small,medium,large,xl,xxl',
                 'shirt_number' => 'nullable|string|max:10',
@@ -153,7 +154,7 @@ class ParticipantController extends Controller
             ]);
 
             // Validate mobile if provided
-            if (isset($validated['mobile']) && !Participant::validateMobile($validated['mobile'])) {
+            if (isset($validated['mobile']) && ! Participant::validateMobile($validated['mobile'])) {
                 throw ValidationException::withMessages([
                     'mobile' => 'Mobile number must be 10-15 digits',
                 ]);
@@ -162,7 +163,7 @@ class ParticipantController extends Controller
             // Handle file upload
             if ($request->hasFile('passport_picture')) {
                 $file = $request->file('passport_picture');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('passports', $filename, 'public');
                 $validated['passport_picture'] = $path;
             }
@@ -170,13 +171,13 @@ class ParticipantController extends Controller
             // Handle file upload
             if ($request->hasFile('id_picture')) {
                 $file = $request->file('id_picture');
-                $filename = time() . '_' . $file->getClientOriginalName();
+                $filename = time().'_'.$file->getClientOriginalName();
                 $path = $file->storeAs('ids', $filename, 'public');
                 $validated['id_picture'] = $path;
             }
 
             // Remove null values
-            $validated = array_filter($validated, function($value) {
+            $validated = array_filter($validated, function ($value) {
                 return $value !== null;
             });
 
@@ -195,7 +196,7 @@ class ParticipantController extends Controller
     {
         $participant = Participant::find($id);
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json(['error' => 'Participant not found'], Response::HTTP_NOT_FOUND);
         }
 

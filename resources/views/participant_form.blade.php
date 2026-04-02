@@ -34,8 +34,9 @@
                             <label class="form-label required" for="league_type">LEAGUE</label>
                             <select class="form-select" id="league_type" name="league_type" required>
                                 <option value="">Select League</option>
-                                <option value="male">KTPL (Mens League)</option>
-                                <option value="female">WTPL (Women League)</option>
+                                @foreach(($leagues ?? collect()) as $league)
+                                    <option value="{{ $league->slug }}">{{ $league->name }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>

@@ -77,8 +77,9 @@
                         <div class="col-md-6">
                             <label class="form-label">League</label>
                             <select class="form-select" name="league_type" required>
-                                <option value="male" {{ ($participant->league_type ?? 'male') === 'male' ? 'selected' : '' }}>Male</option>
-                                <option value="female" {{ ($participant->league_type ?? 'male') === 'female' ? 'selected' : '' }}>Female</option>
+                                @foreach(($leagues ?? collect()) as $league)
+                                    <option value="{{ $league->slug }}" {{ ($participant->league_type ?? 'male') === $league->slug ? 'selected' : '' }}>{{ $league->name }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>

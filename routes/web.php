@@ -1,11 +1,11 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\PlayerController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ParticipantFormController;
+use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TeamController;
+use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::get('/', [ParticipantFormController::class, 'index'])->name('form.index');
@@ -27,6 +27,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middl
 Route::middleware('auth')->group(function () {
     Route::get('/team/dashboard', [TeamController::class, 'teamDashboard'])->name('team.dashboard');
     Route::post('/team/draft/rounds/{round}/pick/{participant}', [TeamController::class, 'pickInRound'])->name('team.draft.round.pick');
+    Route::post('/team/draft/rounds/{round}/tick', [TeamController::class, 'tickRound'])->name('team.draft.round.tick');
     Route::get('/activities', [TeamController::class, 'activities'])->middleware('activities.scope')->name('activities.index');
     Route::get('/player/profile', [PlayerController::class, 'profile'])->name('player.profile');
 });
@@ -34,7 +35,7 @@ Route::middleware('auth')->group(function () {
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
-    
+
     // Participants management
     Route::get('/participants', [AdminController::class, 'participants'])->name('participants');
     Route::get('/participants/{id}', [AdminController::class, 'viewParticipant'])->name('participant.view');
@@ -69,7 +70,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/league-setup', [TeamController::class, 'saveLeagueSetup'])->name('league.setup.save');
     Route::patch('/league-setup/{roundNumber}', [TeamController::class, 'updateLeagueRound'])->name('league.round.update');
     Route::delete('/league-setup', [TeamController::class, 'clearLeagueSetup'])->name('league.setup.clear');
-    
+    Route::post('/leagues', [TeamController::class, 'storeLeague'])->name('leagues.store');
+
     // Users management
     Route::get('/users', [AdminController::class, 'users'])->name('users');
     Route::post('/users', [AdminController::class, 'createUser'])->name('user.create');
