@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->unsignedTinyInteger('max_players')->default(11);
             $table->string('logo')->nullable();
-            $table->string('color', 7)->default('#6c757d')->after('logo');
+            $table->string('color', 7)->default('#6c757d');
             $table->timestamps();
         });
 

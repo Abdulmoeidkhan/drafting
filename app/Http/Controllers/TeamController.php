@@ -1178,6 +1178,7 @@ class TeamController extends Controller
         $round1Order = $submittedOrder;
 
         DB::transaction(function () use ($leagueType, $maxPlayers, $round1Order) {
+            $this->resetLeagueDraftProgress($leagueType);
             LeagueRoundConfig::query()->where('league_type', $leagueType)->delete();
 
             $currentOrder = $round1Order;
@@ -1259,10 +1260,29 @@ class TeamController extends Controller
 
         $leagueType = $this->normalizeLeagueType((string) $validated['league_type']);
 
-        LeagueRoundConfig::query()->where('league_type', $leagueType)->delete();
+        DB::transaction(function () use ($leagueType) {
+            $this->resetLeagueDraftProgress($leagueType);
+            LeagueRoundConfig::query()->where('league_type', $leagueType)->delete();
+        });
 
         return redirect()
             ->route('admin.teams', ['tab' => 'league-setup', 'league' => $leagueType])
             ->with('success', $this->leagueLabel($leagueType).' league setup cleared.');
+    }
+
+    /**
+     * Clear draft progress for a league so setup regeneration starts from round 1.
+     */
+    private function resetLeagueDraftProgress(string $leagueType): void
+    {
+        DraftRound::query()->where('league_type', $leagueType)->delete();
+
+        Participant::query()
+            ->where('league_type', $leagueType)
+            ->whereNotNull('team_id')
+            ->update([
+                'team_id' => null,
+                'drafted_at' => null,
+            ]);
     }
 }
