@@ -30,7 +30,7 @@
         </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card mb-4" data-broadcast-config="true" data-broadcast-league="{{ $activeRound->league_type ?? '' }}" data-broadcast-category="{{ $activeRound->category_id ?? '' }}" data-broadcast-round="{{ $activeRound->id ?? '' }}" data-broadcast-current-team="{{ $activeRound->current_team_id ?? '' }}" data-team-id="{{ $team->id }}" data-timer-seconds="{{ $remainingTurnSeconds }}" data-timer-start="{{ $activeRound->current_turn_started_at ?? '' }}" data-timer-duration="{{ $activeRound->turn_time_seconds ?? '' }}">
         <div class="card-body">
             <h5 class="mb-3">Active Draft Round</h5>
 
@@ -38,13 +38,19 @@
                 <p class="mb-1"><strong>Category:</strong> {{ $activeRound->category?->name ?: 'N/A' }}</p>
                 <p class="mb-1"><strong>Current Team:</strong> {{ $activeRound->currentTeam?->name ?: 'N/A' }}</p>
                 <p class="mb-1"><strong>Your Picks This Round:</strong> {{ $teamRoundPicksCount }} / {{ $activeRound->picks_per_team }}</p>
-                <p class="mb-3"><strong>Time Remaining:</strong> {{ $remainingTurnSeconds }}s</p>
+                <p class="mb-3"><strong>Time Remaining:</strong> <span data-timer-display>{{ $remainingTurnSeconds }}</span>s</p>
 
                 @if($isTeamTurn)
-                    <div class="alert alert-info py-2">It is your turn to pick.</div>
+                    <div class="alert alert-info py-2" data-turn-status><i class="bi bi-clock"></i> <strong>🎯 It is YOUR turn to pick!</strong></div>
                 @else
-                    <div class="alert alert-secondary py-2">Waiting for current team to finish their pick.</div>
+                    <div class="alert alert-secondary py-2" data-turn-status>Waiting for current team to finish their pick.</div>
                 @endif
+
+                <div class="mt-2">
+                    <div id="broadcast-status" style="padding: 8px; border-radius: 4px; font-size: 0.85rem;">
+                        <span style="color: #666;">Initializing real-time connection...</span>
+                    </div>
+                </div>
 
                 @if($draftPoolParticipants->count() > 0)
                     <div class="table-responsive">
@@ -92,10 +98,10 @@
                                             @if($canPick)
                                                 <form method="POST" action="{{ route('team.draft.round.pick', ['round' => $activeRound->id, 'participant' => $player->id]) }}" class="d-inline">
                                                     @csrf
-                                                    <button type="submit" class="btn btn-sm btn-primary">Pick Player</button>
+                                                    <button type="submit" class="btn btn-sm btn-primary" data-pick-button>Pick Player</button>
                                                 </form>
                                             @else
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Pick Player</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled data-pick-button>Pick Player</button>
                                             @endif
                                         </td>
                                     </tr>
@@ -208,5 +214,134 @@
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+@vite('resources/js/app.js')
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const configElement = document.querySelector('[data-broadcast-config="true"]');
+    if (!configElement) {
+        console.warn('⚠ Broadcast config element not found!');
+        return;
+    }
+
+    const leagueType = configElement.dataset.broadcastLeague;
+    const categoryId = configElement.dataset.broadcastCategory;
+    const roundId = parseInt(configElement.dataset.broadcastRound, 10);
+    const teamId = parseInt(configElement.dataset.teamId, 10);
+    const timerSeconds = parseInt(configElement.dataset.timerSeconds, 10);
+    const timerStartStr = configElement.dataset.timerStart;
+    const timerDuration = parseInt(configElement.dataset.timerDuration, 10);
+    const currentTeamId = parseInt(configElement.dataset.broadcastCurrentTeam, 10);
+
+    const statusElement = document.getElementById('broadcast-status');
+    let timerInterval = null;
+
+    function updateConnectionStatus(message, color) {
+        if (statusElement) {
+            statusElement.innerHTML = '<span style="color:' + color + '">' + message + '</span>';
+        }
+    }
+
+    function showNotification(message, type = 'info') {
+        const alertClass = type === 'success' ? 'alert-success' :
+                          type === 'error' ? 'alert-danger' :
+                          'alert-info';
+
+        const html = `
+            <div class="alert ${alertClass} alert-dismissible fade show">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+
+        const container = document.querySelector('.container');
+        if (container) container.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function updateButtonStates(newCurrentTeamId) {
+        const buttons = document.querySelectorAll('[data-pick-button]');
+        const alertBox = document.querySelector('[data-turn-status]');
+        const isTurn = (newCurrentTeamId === teamId);
+
+        buttons.forEach(btn => {
+            btn.disabled = !isTurn;
+            btn.classList.toggle('btn-primary', isTurn);
+            btn.classList.toggle('btn-outline-secondary', !isTurn);
+        });
+
+        if (alertBox) {
+            alertBox.className = 'alert py-2 ' + (isTurn ? 'alert-info' : 'alert-secondary');
+            alertBox.innerHTML = isTurn
+                ? '<i class="bi bi-clock"></i> <strong>🎯 Your turn!</strong>'
+                : 'Waiting for current team...';
+        }
+    }
+
+    function updateTimer() {
+        const el = document.querySelector('[data-timer-display]');
+        if (!el || !timerStartStr) return;
+
+        const start = new Date(timerStartStr).getTime();
+        const now = Date.now();
+        const remaining = Math.max(0, (timerDuration * 1000) - (now - start));
+        const seconds = Math.ceil(remaining / 1000);
+
+        el.textContent = seconds + 's';
+
+        if (seconds === 0) {
+            clearInterval(timerInterval);
+            setTimeout(() => location.reload(), 1000);
+        }
+    }
+
+    if (timerSeconds >= 0 && timerStartStr) {
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    updateButtonStates(currentTeamId);
+
+    function attachEchoListeners() {
+        if (!window.Echo) {
+            setTimeout(attachEchoListeners, 500);
+            return;
+        }
+
+        const channelName = `draft.${leagueType}.${categoryId}`;
+        updateConnectionStatus('✓ Connected', '#28a745');
+
+        window.Echo.channel(channelName)
+            .listen('.player.picked', data => {
+                if (data.draft_round_id === roundId) {
+                    showNotification(`<strong>${data.team_name}</strong> picked ${data.participant_name}`, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                }
+            })
+            .listen('.turn.changed', data => {
+                if (data.draft_round_id === roundId) {
+                    updateButtonStates(data.current_team_id);
+                    showNotification(
+                        data.current_team_id === teamId
+                            ? '<strong>🎯 Your turn!</strong>'
+                            : 'Another team is picking',
+                        'info'
+                    );
+                }
+            })
+            .listen('.round.completed', data => {
+                if (data.draft_round_id === roundId) {
+                    showNotification('Round completed!', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            });
+    }
+
+    attachEchoListeners();
+
+    window.addEventListener('beforeunload', () => {
+        if (timerInterval) clearInterval(timerInterval);
+    });
+});
+</script>
 </body>
 </html>

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PlayerPicked;
+use App\Events\RoundCompleted;
+use App\Events\TurnChanged;
 use App\Models\Category;
 use App\Models\DraftPick;
 use App\Models\DraftRound;
@@ -566,6 +569,12 @@ class TeamController extends Controller
                 'drafted_at' => now(),
             ]);
 
+            // Broadcast player picked event
+            $draftPick = DraftPick::find(DraftPick::max('id'));
+            if ($draftPick) {
+                PlayerPicked::dispatch($draftPick);
+            }
+
             $nextTeamId = $this->findNextTeamId($lockedRound, $currentTeam->id);
 
             if ($nextTeamId === null) {
@@ -575,6 +584,9 @@ class TeamController extends Controller
                     'current_turn_started_at' => null,
                 ]);
 
+                // Broadcast round completed event
+                RoundCompleted::dispatch($lockedRound);
+
                 $nextStarted = $this->autoStartNextRound($lockedRound);
 
                 return ['success' => $nextStarted
@@ -582,11 +594,15 @@ class TeamController extends Controller
                     : 'Pick completed. Draft round is now finished.'];
             }
 
+            $previousTeamId = $currentTeam->id;
             $lockedRound->update([
                 'current_team_id' => $nextTeamId,
                 'current_pick_number' => (int) $lockedRound->current_pick_number + 1,
                 'current_turn_started_at' => now(),
             ]);
+
+            // Broadcast turn changed event
+            TurnChanged::dispatch($lockedRound, (string) $previousTeamId);
 
             return ['success' => 'Pick completed successfully.'];
         });
@@ -955,22 +971,30 @@ class TeamController extends Controller
         $nextTeamId = $this->findNextTeamId($round, (int) $round->current_team_id);
 
         if ($nextTeamId === null) {
+            $previousTeamId = (string) $round->current_team_id;
             $round->update([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'current_turn_started_at' => null,
             ]);
 
+            // Broadcast round completed event
+            RoundCompleted::dispatch($round);
+
             $this->autoStartNextRound($round);
 
             return false;
         }
 
+        $previousTeamId = (string) $round->current_team_id;
         $round->update([
             'current_team_id' => $nextTeamId,
             'current_pick_number' => (int) $round->current_pick_number + 1,
             'current_turn_started_at' => now(),
         ]);
+
+        // Broadcast turn changed event
+        TurnChanged::dispatch($round, $previousTeamId);
 
         return true;
     }
@@ -1077,6 +1101,8 @@ class TeamController extends Controller
         $round1Order = $submittedOrder;
 
         DB::transaction(function () use ($leagueType, $maxPlayers, $round1Order) {
+            // Reset any existing round progress before re-creating new league settings.
+            DraftRound::query()->where('league_type', $leagueType)->delete();
             LeagueRoundConfig::query()->where('league_type', $leagueType)->delete();
 
             $currentOrder = $round1Order;
@@ -1158,6 +1184,7 @@ class TeamController extends Controller
 
         $leagueType = $this->normalizeLeagueType((string) $validated['league_type']);
 
+        DraftRound::query()->where('league_type', $leagueType)->delete();
         LeagueRoundConfig::query()->where('league_type', $leagueType)->delete();
 
         return redirect()

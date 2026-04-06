@@ -58,6 +58,36 @@
                 <h2><i class="bi bi-person"></i> Personal Information</h2>
             </div>
             <div class="card-body">
+                @php
+                    $profileImagePath = $participant->passport_picture ?: $participant->id_picture;
+                    $profileImageUrl = $profileImagePath
+                        ? route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => $participant->passport_picture ? 'passport' : 'id'])
+                        : null;
+                @endphp
+
+                <div class="mb-4 d-flex align-items-center gap-3">
+                    @if($profileImageUrl)
+                        <img
+                            src="{{ $profileImageUrl }}"
+                            alt="{{ $participant->full_name }} profile picture"
+                            style="width: 110px; height: 110px; object-fit: cover; border-radius: 50%; border: 3px solid #e5e7eb;"
+                        >
+                    @else
+                        <div
+                            class="d-flex align-items-center justify-content-center"
+                            style="width: 110px; height: 110px; border-radius: 50%; background: #f3f4f6; color: #6b7280; border: 2px dashed #d1d5db;"
+                        >
+                            <i class="bi bi-person" style="font-size: 2rem;"></i>
+                        </div>
+                    @endif
+
+                    <div>
+                        <div class="text-uppercase text-muted" style="font-size: 0.75rem; letter-spacing: 0.08em;">Profile Picture</div>
+                        <div class="fw-semibold">{{ $participant->full_name }}</div>
+                        <small class="text-muted">{{ $profileImageUrl ? 'Passport/ID photo available' : 'No photo uploaded' }}</small>
+                    </div>
+                </div>
+
                 <div class="info-row">
                     <div class="info-item">
                         <span class="info-label">Full Name</span>

@@ -1021,6 +1021,99 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    @vite('resources/js/app.js')
+    
+    <script>
+        // Real-time broadcast listening for draft updates
+        document.addEventListener('DOMContentLoaded', function() {
+            const teamsPage = document.getElementById('teamsPage');
+            if (!teamsPage) return;
+            
+            const activeLeagueType = teamsPage.dataset.activeLeague || 'male';
+            const activeDraftCategory = teamsPage.dataset.activeDraftCategory || '1';
+            
+            const channelName = 'draft.' + activeLeagueType + '.' + activeDraftCategory;
+            let listenerAttached = false;
+            
+            // Show toast notification
+            function showNotification(message, type = 'info') {
+                const alertClass = type === 'success' ? 'alert-success' : 
+                                  type === 'error' ? 'alert-danger' : 
+                                  'alert-info';
+                const alertHtml = '<div class="alert ' + alertClass + ' alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px;">' +
+                                 message +
+                                 '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>' +
+                                 '</div>';
+                document.body.insertAdjacentHTML('afterbegin', alertHtml);
+            }
+            
+            // Setup real-time listeners when Echo is ready
+            function attachEchoListeners() {
+                if (listenerAttached || !window.Echo || !window.Echo.channel) {
+                    return;
+                }
+                
+                listenerAttached = true;
+                
+                window.Echo.channel(channelName)
+                    .listen('.player.picked', function(data) {
+                        console.log('✓ Admin broadcast: Player picked -', data.participant_name, 'by', data.team_name);
+                        showNotification(
+                            '<strong>' + data.team_name + '</strong> picked <strong>' + data.participant_name + '</strong>',
+                            'success'
+                        );
+                        // Refresh the page to show updated state
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1500);
+                    })
+                    .listen('.turn.changed', function(data) {
+                        console.log('✓ Admin broadcast: Turn changed');
+                        showNotification(
+                            'Turn advanced to the next team.',
+                            'info'
+                        );
+                        // Refresh to show new current team and reset timer
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1000);
+                    })
+                    .listen('.round.completed', function(data) {
+                        console.log('✓ Admin broadcast: Round completed');
+                        showNotification(
+                            '<strong>Round completed!</strong> Next round starting...',
+                            'success'
+                        );
+                        // Refresh to show round completion and auto-started next round
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    });
+            }
+            
+            // Try to attach listeners immediately if Echo ready
+            if (window.Echo && window.Echo.channel) {
+                attachEchoListeners();
+                console.log('✓ Admin Echo connected - real-time updates active');
+            } else {
+                // Wait for Echo to be ready (up to 5 seconds)
+                let attempts = 0;
+                const echoCheckInterval = setInterval(function() {
+                    attempts++;
+                    if (window.Echo && window.Echo.channel) {
+                        clearInterval(echoCheckInterval);
+                        attachEchoListeners();
+                        console.log('✓ Admin Echo connected - real-time updates active');
+                    } else if (attempts > 50) {
+                        clearInterval(echoCheckInterval);
+                        console.warn('⚠ Admin Echo not available - real-time updates disabled');
+                        console.warn('  Hint: npm packages not installed. Run: npm install');
+                    }
+                }, 100);
+            }
+        });
+    </script>
+    
     <script>
         // ── Round 1 sortable pick-order list ────────────────────────────────────
         (function () {
