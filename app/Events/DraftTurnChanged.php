@@ -4,14 +4,18 @@ namespace App\Events;
 
 use App\Models\DraftRound;
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class DraftTurnChanged implements ShouldBroadcastNow, ShouldDispatchAfterCommit
+class DraftTurnChanged implements ShouldBroadcast, ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
+
+    public ?string $connection;
+
+    public string $queue;
 
     public int $roundId;
 
@@ -36,6 +40,9 @@ class DraftTurnChanged implements ShouldBroadcastNow, ShouldDispatchAfterCommit
     public function __construct(DraftRound $round, ?string $message = null)
     {
         $round->loadMissing('currentTeam');
+
+        $this->connection = config('broadcasting.queue_connection');
+        $this->queue = (string) config('broadcasting.queue', 'broadcasts');
 
         $this->roundId = (int) $round->id;
         $this->leagueType = (string) $round->league_type;

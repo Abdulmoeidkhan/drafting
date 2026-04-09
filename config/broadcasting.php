@@ -19,6 +19,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Broadcast Queue
+    |--------------------------------------------------------------------------
+    |
+    | Broadcast events can be queued so websocket publishing does not block
+    | request lifecycles. Use these values to control connection and queue
+    | names in production worker setups.
+    |
+    */
+
+    'queue_connection' => env('BROADCAST_QUEUE_CONNECTION'),
+
+    'queue' => env('BROADCAST_QUEUE', 'broadcasts'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Broadcast Connections
     |--------------------------------------------------------------------------
     |
@@ -37,7 +52,7 @@ return [
             'app_id' => env('REVERB_APP_ID'),
             'options' => [
                 'host' => env('REVERB_HOST'),
-                'port' => env('REVERB_PORT', 443),
+                'port' => env('REVERB_PORT', env('REVERB_SCHEME', 'https') === 'https' ? 443 : 80),
                 'scheme' => env('REVERB_SCHEME', 'https'),
                 'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
             ],
@@ -53,7 +68,7 @@ return [
             'app_id' => env('PUSHER_APP_ID'),
             'options' => [
                 'cluster' => env('PUSHER_APP_CLUSTER'),
-                'host' => env('PUSHER_HOST') ?: 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com',
+                'host' => env('PUSHER_HOST') ?: 'api-' . env('PUSHER_APP_CLUSTER', 'mt1') . '.pusher.com',
                 'port' => env('PUSHER_PORT', 443),
                 'scheme' => env('PUSHER_SCHEME', 'https'),
                 'encrypted' => true,

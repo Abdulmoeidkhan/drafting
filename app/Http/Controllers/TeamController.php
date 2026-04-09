@@ -673,6 +673,10 @@ class TeamController extends Controller
                     'advanced' => false,
                     'round_closed' => true,
                     'message' => 'Round is already closed.',
+                    'roundId' => (int) $lockedRound->id,
+                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
+                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
+                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
                 ];
             }
 
@@ -681,10 +685,15 @@ class TeamController extends Controller
                     'advanced' => false,
                     'round_closed' => false,
                     'message' => 'Turn is still active.',
+                    'roundId' => (int) $lockedRound->id,
+                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
+                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
+                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
                 ];
             }
 
             $advanced = $this->advanceTurnOrComplete($lockedRound);
+            $lockedRound->refresh();
 
             return [
                 'advanced' => $advanced,
@@ -692,6 +701,10 @@ class TeamController extends Controller
                 'message' => $advanced
                     ? 'Turn expired and moved to next team.'
                     : 'Turn expired and round completed.',
+                'roundId' => (int) $lockedRound->id,
+                'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
+                'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
+                'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
             ];
         });
 

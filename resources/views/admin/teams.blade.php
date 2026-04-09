@@ -234,7 +234,7 @@
                                                 <span class="mx-1">|</span>
                                                 Pick {{ $activeRound->current_pick_number }} / {{ $activeRound->total_picks_planned }}
                                                 <span class="mx-1">|</span>
-                                                Timer: <strong id="turnTimer" data-seconds="{{ $activeRoundRemainingSeconds }}" data-tick-url="{{ route('admin.draft.round.tick', $activeRound->id) }}">--:--</strong>
+                                                Timer: <strong id="turnTimer" data-seconds="{{ $activeRoundRemainingSeconds }}" data-total-seconds="{{ (int) $activeRound->turn_time_seconds }}" data-turn-started-at-ts="{{ $activeRound->current_turn_started_at?->timestamp }}" data-server-now-ts="{{ now()->timestamp }}" data-tick-url="{{ route('admin.draft.round.tick', $activeRound->id) }}">--:--</strong>
                                             </div>
                                             <form method="POST" action="{{ route('admin.draft.round.close', $activeRound->id) }}" onsubmit="return confirm('Close the active round now?');">
                                                 @csrf
@@ -1166,34 +1166,79 @@
             const timerElement = document.getElementById('turnTimer');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             let skipRequestInFlight = false;
+            let reloadScheduled = false;
+            const serverNowTs = timerElement ? parseInt(timerElement.dataset.serverNowTs || '0', 10) : Number.NaN;
+            const clientNowTs = Math.floor(Date.now() / 1000);
+            const serverClientOffsetSeconds = Number.isNaN(serverNowTs) ? 0 : serverNowTs - clientNowTs;
 
-            function updateTurnTimer(secondsLeft) {
+            function reloadPage() {
+                if (reloadScheduled) {
+                    return;
+                }
+
+                reloadScheduled = true;
+                window.location.reload();
+            }
+
+            function getTimerState() {
+                if (!timerElement) {
+                    return { secondsLeft: 0, totalSeconds: 0 };
+                }
+
+                const totalSeconds = parseInt(timerElement.dataset.totalSeconds || '0', 10);
+                const startedAtTs = parseInt(timerElement.dataset.turnStartedAtTs || '0', 10);
+
+                if (Number.isNaN(totalSeconds) || totalSeconds <= 0 || Number.isNaN(startedAtTs) || startedAtTs <= 0) {
+                    return {
+                        secondsLeft: Math.max(0, parseInt(timerElement.dataset.seconds || '0', 10) || 0),
+                        totalSeconds: Number.isNaN(totalSeconds) ? 0 : totalSeconds,
+                    };
+                }
+
+                const adjustedNowTs = Math.floor(Date.now() / 1000) + serverClientOffsetSeconds;
+                const turnEndsAtTs = startedAtTs + totalSeconds;
+                const secondsLeft = Math.max(0, turnEndsAtTs - adjustedNowTs);
+
+                return { secondsLeft, totalSeconds };
+            }
+
+            function updateTurnTimer() {
                 if (!timerElement) {
                     return;
                 }
 
+                const { secondsLeft, totalSeconds } = getTimerState();
                 const mins = Math.floor(secondsLeft / 60);
                 const secs = secondsLeft % 60;
-                timerElement.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+                const remainingLabel = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+                timerElement.dataset.seconds = String(secondsLeft);
+
+                if (!Number.isNaN(totalSeconds) && totalSeconds > 0) {
+                    const totalMins = Math.floor(totalSeconds / 60);
+                    const totalSecs = totalSeconds % 60;
+                    const totalLabel = String(totalMins).padStart(2, '0') + ':' + String(totalSecs).padStart(2, '0');
+                    timerElement.textContent = remainingLabel + ' / ' + totalLabel;
+
+                    return;
+                }
+
+                timerElement.textContent = remainingLabel;
             }
 
-            async function maybeSkipTurn(forceCheck) {
+            async function maybeSkipTurn() {
                 if (!timerElement || skipRequestInFlight) {
                     return;
                 }
 
                 const tickUrl = timerElement.dataset.tickUrl;
+                const secondsLeft = getTimerState().secondsLeft;
 
                 if (!tickUrl) {
                     return;
                 }
 
-                if (!forceCheck) {
-                    const secondsLeft = parseInt(timerElement.dataset.seconds || '0', 10);
-
-                    if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
-                        return;
-                    }
+                if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
+                    return;
                 }
 
                 skipRequestInFlight = true;
@@ -1213,8 +1258,17 @@
 
                     const data = await response.json();
 
+                    if (data?.currentTurnStartedAtTs && data?.turnTimeSeconds) {
+                        timerElement.dataset.turnStartedAtTs = String(data.currentTurnStartedAtTs);
+                        timerElement.dataset.totalSeconds = String(data.turnTimeSeconds);
+                        timerElement.dataset.seconds = String(data.turnTimeSeconds);
+                        timerElement.dataset.serverNowTs = String(Math.floor(Date.now() / 1000) + serverClientOffsetSeconds);
+                        updateTurnTimer();
+                    }
+
                     if (data.advanced || data.round_closed) {
-                        window.location.reload();
+                        reloadPage();
+                        return;
                     }
                 } finally {
                     skipRequestInFlight = false;
@@ -1222,26 +1276,21 @@
             }
 
             if (timerElement) {
-                let secondsLeft = parseInt(timerElement.dataset.seconds || '0', 10);
-                secondsLeft = Number.isNaN(secondsLeft) ? 0 : Math.max(0, secondsLeft);
-                updateTurnTimer(secondsLeft);
+                updateTurnTimer();
 
                 setInterval(function () {
-                    if (secondsLeft > 0) {
-                        secondsLeft = Math.max(0, secondsLeft - 1);
-                        timerElement.dataset.seconds = String(secondsLeft);
-                    }
+                    const secondsLeft = getTimerState().secondsLeft;
 
-                    updateTurnTimer(secondsLeft);
+                    updateTurnTimer();
 
                     if (secondsLeft === 0) {
-                        maybeSkipTurn(false);
+                        maybeSkipTurn();
                     }
                 }, 1000);
 
                 // Periodic server sync in case multiple admins are viewing the draft board.
                 setInterval(function () {
-                    maybeSkipTurn(true);
+                    maybeSkipTurn();
                 }, 15000);
             }
 
@@ -1263,7 +1312,7 @@
             if (shouldAutoRefreshDraft && !adminBroadcastConfig.enabled) {
                 setInterval(function () {
                     if (document.visibilityState === 'visible') {
-                        window.location.reload();
+                        reloadPage();
                     }
                 }, 15000);
             }
@@ -1271,7 +1320,7 @@
             if (shouldAutoRefreshDraft && adminBroadcastConfig.enabled && window.Echo) {
                 window.Echo.channel(adminBroadcastConfig.channel)
                     .listen('.draft.turn.changed', function () {
-                        window.location.reload();
+                        reloadPage();
                     });
             }
         });

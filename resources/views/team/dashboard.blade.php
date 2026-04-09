@@ -44,6 +44,9 @@
                     <strong>Time Remaining:</strong>
                     <span id="teamTurnTimer"
                           data-seconds="{{ $remainingTurnSeconds }}"
+                          data-total-seconds="{{ (int) $activeRound->turn_time_seconds }}"
+                                                    data-turn-started-at-ts="{{ $activeRound->current_turn_started_at?->timestamp }}"
+                                                    data-server-now-ts="{{ now()->timestamp }}"
                           data-tick-url="{{ $activeRound ? route('team.draft.round.tick', $activeRound->id) : '' }}">
                         {{ $remainingTurnSeconds }}s
                     </span>
@@ -225,6 +228,7 @@
         'enabled' => !empty($teamBroadcastConnection['key']),
         'channel' => 'draft.league.' . ($teamLeagueType ?? 'male'),
         'teamId' => (int) $team->id,
+        'hasActiveRound' => (bool) $activeRound,
     ];
 @endphp
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -235,34 +239,79 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const broadcastConfig = @json($teamBroadcastConfig);
         let tickRequestInFlight = false;
+        let reloadScheduled = false;
+        const serverNowTs = timerElement ? parseInt(timerElement.dataset.serverNowTs || '0', 10) : Number.NaN;
+        const clientNowTs = Math.floor(Date.now() / 1000);
+        const serverClientOffsetSeconds = Number.isNaN(serverNowTs) ? 0 : serverNowTs - clientNowTs;
 
-        function renderTimer(secondsLeft) {
+        function reloadPage() {
+            if (reloadScheduled) {
+                return;
+            }
+
+            reloadScheduled = true;
+            window.location.reload();
+        }
+
+        function getTimerState() {
+            if (!timerElement) {
+                return { secondsLeft: 0, totalSeconds: 0 };
+            }
+
+            const totalSeconds = parseInt(timerElement.dataset.totalSeconds || '0', 10);
+            const startedAtTs = parseInt(timerElement.dataset.turnStartedAtTs || '0', 10);
+
+            if (Number.isNaN(totalSeconds) || totalSeconds <= 0 || Number.isNaN(startedAtTs) || startedAtTs <= 0) {
+                return {
+                    secondsLeft: Math.max(0, parseInt(timerElement.dataset.seconds || '0', 10) || 0),
+                    totalSeconds: Number.isNaN(totalSeconds) ? 0 : totalSeconds,
+                };
+            }
+
+            const adjustedNowTs = Math.floor(Date.now() / 1000) + serverClientOffsetSeconds;
+            const turnEndsAtTs = startedAtTs + totalSeconds;
+            const secondsLeft = Math.max(0, turnEndsAtTs - adjustedNowTs);
+
+            return { secondsLeft, totalSeconds };
+        }
+
+        function renderTimer() {
             if (!timerElement) {
                 return;
             }
 
+            const { secondsLeft, totalSeconds } = getTimerState();
             const mins = Math.floor(secondsLeft / 60);
             const secs = secondsLeft % 60;
-            timerElement.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            const remainingLabel = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            timerElement.dataset.seconds = String(secondsLeft);
+
+            if (!Number.isNaN(totalSeconds) && totalSeconds > 0) {
+                const totalMins = Math.floor(totalSeconds / 60);
+                const totalSecs = totalSeconds % 60;
+                const totalLabel = String(totalMins).padStart(2, '0') + ':' + String(totalSecs).padStart(2, '0');
+                timerElement.textContent = remainingLabel + ' / ' + totalLabel;
+
+                return;
+            }
+
+            timerElement.textContent = remainingLabel;
         }
 
-        async function maybeAdvanceTurn(forceCheck) {
+        async function maybeAdvanceTurn() {
             if (!timerElement || tickRequestInFlight) {
                 return;
             }
 
             const tickUrl = timerElement.dataset.tickUrl;
+            const secondsLeft = getTimerState().secondsLeft;
 
             if (!tickUrl) {
                 return;
             }
 
-            if (!forceCheck) {
-                const secondsLeft = parseInt(timerElement.dataset.seconds || '0', 10);
-
-                if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
-                    return;
-                }
+            if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
+                return;
             }
 
             tickRequestInFlight = true;
@@ -282,8 +331,17 @@
 
                 const payload = await response.json();
 
+                if (payload?.currentTurnStartedAtTs && payload?.turnTimeSeconds) {
+                    timerElement.dataset.turnStartedAtTs = String(payload.currentTurnStartedAtTs);
+                    timerElement.dataset.totalSeconds = String(payload.turnTimeSeconds);
+                    timerElement.dataset.seconds = String(payload.turnTimeSeconds);
+                    timerElement.dataset.serverNowTs = String(Math.floor(Date.now() / 1000) + serverClientOffsetSeconds);
+                    renderTimer();
+                }
+
                 if (payload.advanced || payload.round_closed) {
-                    window.location.reload();
+                    reloadPage();
+                    return;
                 }
             } finally {
                 tickRequestInFlight = false;
@@ -291,26 +349,29 @@
         }
 
         if (timerElement) {
-            let secondsLeft = parseInt(timerElement.dataset.seconds || '0', 10);
-            secondsLeft = Number.isNaN(secondsLeft) ? 0 : Math.max(0, secondsLeft);
-            renderTimer(secondsLeft);
+            renderTimer();
 
             setInterval(function () {
-                if (secondsLeft > 0) {
-                    secondsLeft = Math.max(0, secondsLeft - 1);
-                    timerElement.dataset.seconds = String(secondsLeft);
-                }
+                const secondsLeft = getTimerState().secondsLeft;
 
-                renderTimer(secondsLeft);
+                renderTimer();
 
                 if (secondsLeft === 0) {
-                    maybeAdvanceTurn(false);
+                    maybeAdvanceTurn();
                 }
             }, 1000);
 
             setInterval(function () {
-                maybeAdvanceTurn(true);
+                maybeAdvanceTurn();
             }, 15000);
+        }
+
+        if (!broadcastConfig.hasActiveRound) {
+            setInterval(function () {
+                if (document.visibilityState === 'visible') {
+                    window.location.reload();
+                }
+            }, 5000);
         }
 
         if (timerElement && !broadcastConfig.enabled) {
@@ -332,7 +393,7 @@
                     }
 
                     window.setTimeout(function () {
-                        window.location.reload();
+                        reloadPage();
                     }, payload?.currentTeamId === broadcastConfig.teamId ? 700 : 300);
                 });
         }
