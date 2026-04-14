@@ -142,7 +142,7 @@ class TeamController extends Controller
                 ->count();
 
             if ($activeRound->current_turn_started_at) {
-                $elapsed = Carbon::now()->diffInSeconds($activeRound->current_turn_started_at);
+                $elapsed = abs(Carbon::now()->diffInSeconds($activeRound->current_turn_started_at));
                 $remainingTurnSeconds = max(0, (int) $activeRound->turn_time_seconds - $elapsed);
             }
         }
@@ -372,10 +372,23 @@ class TeamController extends Controller
                 ->toArray()
             : [];
 
+        $activeRoundProcessedTeamIds = [];
+
+        if ($activeRound) {
+            $roundPickOrder = collect($activeRound->pick_order)
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $consumedSlots = max(0, min(((int) $activeRound->current_pick_number) - 1, count($roundPickOrder)));
+            $activeRoundProcessedTeamIds = array_values(array_unique(array_slice($roundPickOrder, 0, $consumedSlots)));
+        }
+
         $activeRoundRemainingSeconds = 0;
 
         if ($activeRound?->current_turn_started_at) {
-            $elapsed = Carbon::now()->diffInSeconds($activeRound->current_turn_started_at);
+            $elapsed = abs(Carbon::now()->diffInSeconds($activeRound->current_turn_started_at));
             $activeRoundRemainingSeconds = max(0, (int) $activeRound->turn_time_seconds - $elapsed);
         }
 
@@ -440,6 +453,7 @@ class TeamController extends Controller
             'activeRound' => $activeRound,
             'activeRoundEligibleCategoryIds' => $activeRoundEligibleCategoryIds,
             'activeRoundTeamPickCounts' => $activeRoundTeamPickCounts,
+            'activeRoundProcessedTeamIds' => $activeRoundProcessedTeamIds,
             'activeRoundRemainingSeconds' => $activeRoundRemainingSeconds,
             'leagueRoundConfigs' => $leagueRoundConfigs,
             'completedRoundsCount' => $completedRoundsCount,
@@ -617,7 +631,7 @@ class TeamController extends Controller
                 'drafted_at' => now(),
             ]);
 
-            $nextTeamId = $this->findNextTeamId($lockedRound, $currentTeam->id);
+            $nextTeamId = $this->findNextTeamId($lockedRound);
 
             if ($nextTeamId === null) {
                 $lockedRound->update([
@@ -673,6 +687,24 @@ class TeamController extends Controller
                     'advanced' => false,
                     'round_closed' => true,
                     'message' => 'Round is already closed.',
+                    'roundId' => (int) $lockedRound->id,
+                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
+                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
+                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
+                ];
+            }
+
+            if (! $lockedRound->current_turn_started_at) {
+                $lockedRound->update([
+                    'current_turn_started_at' => now(),
+                ]);
+
+                $lockedRound->refresh();
+
+                return [
+                    'advanced' => false,
+                    'round_closed' => false,
+                    'message' => 'Turn timer was reset because the previous timer state was missing.',
                     'roundId' => (int) $lockedRound->id,
                     'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
                     'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
@@ -930,7 +962,7 @@ class TeamController extends Controller
     /**
      * Find next team in order that still has remaining picks in this round.
      */
-    private function findNextTeamId(DraftRound $round, int $currentTeamId): ?int
+    private function findNextTeamId(DraftRound $round): ?int
     {
         $order = collect($round->pick_order)
             ->map(fn ($id) => (int) $id)
@@ -942,23 +974,15 @@ class TeamController extends Controller
             return null;
         }
 
-        $currentIndex = array_search($currentTeamId, $order, true);
-        $startIndex = $currentIndex === false ? 0 : $currentIndex;
+        $nextPickNumber = (int) $round->current_pick_number + 1;
 
-        for ($step = 1; $step <= count($order); $step++) {
-            $candidate = $order[($startIndex + $step) % count($order)];
-
-            $candidatePicks = DraftPick::query()
-                ->where('draft_round_id', $round->id)
-                ->where('team_id', $candidate)
-                ->count();
-
-            if ($candidatePicks < $round->picks_per_team) {
-                return $candidate;
-            }
+        if ($nextPickNumber > (int) $round->total_picks_planned) {
+            return null;
         }
 
-        return null;
+        $nextIndex = $nextPickNumber - 1;
+
+        return $order[$nextIndex] ?? null;
     }
 
     /**
@@ -1020,7 +1044,7 @@ class TeamController extends Controller
             return false;
         }
 
-        return Carbon::now()->diffInSeconds($round->current_turn_started_at) >= (int) $round->turn_time_seconds;
+        return abs(Carbon::now()->diffInSeconds($round->current_turn_started_at)) >= (int) $round->turn_time_seconds;
     }
 
     /**
@@ -1029,7 +1053,7 @@ class TeamController extends Controller
      */
     private function advanceTurnOrComplete(DraftRound $round): bool
     {
-        $nextTeamId = $this->findNextTeamId($round, (int) $round->current_team_id);
+        $nextTeamId = $this->findNextTeamId($round);
 
         if ($nextTeamId === null) {
             $round->update([

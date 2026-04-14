@@ -332,6 +332,7 @@
                                                     @php
                                                         $teamPicks = $activeRoundTeamPickCounts[$team->id] ?? 0;
                                                         $isTurn = (int) $activeRound->current_team_id === (int) $team->id;
+                                                        $turnProcessed = in_array((int) $team->id, array_map('intval', $activeRoundProcessedTeamIds ?? []), true);
                                                     @endphp
                                                     <tr>
                                                         <td>{{ $team->name }}</td>
@@ -342,6 +343,8 @@
                                                                 <span class="badge text-bg-primary">Current Turn</span>
                                                             @elseif($teamPicks >= $activeRound->picks_per_team)
                                                                 <span class="badge text-bg-success">Completed</span>
+                                                            @elseif($turnProcessed)
+                                                                <span class="badge text-bg-warning">Turn Skipped</span>
                                                             @else
                                                                 <span class="badge text-bg-secondary">Waiting</span>
                                                             @endif
@@ -1165,6 +1168,7 @@
             const topTabButton = document.getElementById(activeTopTab + '-tab');
             const timerElement = document.getElementById('turnTimer');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const globalDraftRefreshKey = 'draft_force_refresh_at';
             let skipRequestInFlight = false;
             let reloadScheduled = false;
             const serverNowTs = timerElement ? parseInt(timerElement.dataset.serverNowTs || '0', 10) : Number.NaN;
@@ -1177,7 +1181,17 @@
                 }
 
                 reloadScheduled = true;
-                window.location.reload();
+                const url = new URL(window.location.href);
+                url.searchParams.set('_draft_refresh', String(Date.now()));
+                window.location.replace(url.toString());
+            }
+
+            function triggerGlobalDraftRefresh() {
+                try {
+                    localStorage.setItem(globalDraftRefreshKey, String(Date.now()));
+                } catch (error) {
+                    console.warn('Unable to broadcast global draft refresh.', error);
+                }
             }
 
             function getTimerState() {
@@ -1249,14 +1263,29 @@
                         headers: {
                             'X-CSRF-TOKEN': csrfToken,
                             'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
                         },
                     });
 
                     if (!response.ok) {
+                        // Session/CSRF issues can leave the timer frozen at 00 until refresh.
+                        if (response.status === 401 || response.status === 403 || response.status === 419) {
+                            reloadPage();
+                        }
+
+                        console.warn('Draft turn tick failed with status:', response.status);
                         return;
                     }
 
-                    const data = await response.json();
+                    let data = null;
+
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.warn('Draft turn tick returned a non-JSON response.', error);
+                        reloadPage();
+                        return;
+                    }
 
                     if (data?.currentTurnStartedAtTs && data?.turnTimeSeconds) {
                         timerElement.dataset.turnStartedAtTs = String(data.currentTurnStartedAtTs);
@@ -1267,9 +1296,12 @@
                     }
 
                     if (data.advanced || data.round_closed) {
+                        triggerGlobalDraftRefresh();
                         reloadPage();
                         return;
                     }
+                } catch (error) {
+                    console.warn('Draft turn tick request failed.', error);
                 } finally {
                     skipRequestInFlight = false;
                 }
@@ -1294,6 +1326,16 @@
                 }, 15000);
             }
 
+            window.addEventListener('storage', function (event) {
+                if (event.key !== globalDraftRefreshKey || !event.newValue) {
+                    return;
+                }
+
+                if (document.visibilityState === 'visible') {
+                    reloadPage();
+                }
+            });
+
             if (topTabButton) {
                 bootstrap.Tab.getOrCreateInstance(topTabButton).show();
             }
@@ -1302,6 +1344,7 @@
             const fallbackDraftCategoryButton = document.querySelector('#draftCategoryTabs .nav-link');
             const adminBroadcastConfig = @json($adminBroadcastConfig);
             const shouldAutoRefreshDraft = activeTopTab === 'draft';
+            const hasRealtimeDraftChannel = shouldAutoRefreshDraft && adminBroadcastConfig.enabled && !!window.Echo;
 
             if (draftCategoryButton) {
                 bootstrap.Tab.getOrCreateInstance(draftCategoryButton).show();
@@ -1309,7 +1352,7 @@
                 bootstrap.Tab.getOrCreateInstance(fallbackDraftCategoryButton).show();
             }
 
-            if (shouldAutoRefreshDraft && !adminBroadcastConfig.enabled) {
+            if (shouldAutoRefreshDraft && !hasRealtimeDraftChannel) {
                 setInterval(function () {
                     if (document.visibilityState === 'visible') {
                         reloadPage();
@@ -1317,7 +1360,7 @@
                 }, 15000);
             }
 
-            if (shouldAutoRefreshDraft && adminBroadcastConfig.enabled && window.Echo) {
+            if (hasRealtimeDraftChannel) {
                 window.Echo.channel(adminBroadcastConfig.channel)
                     .listen('.draft.turn.changed', function () {
                         reloadPage();
