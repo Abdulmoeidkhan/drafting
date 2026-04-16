@@ -641,15 +641,12 @@ class TeamController extends Controller
                 ]);
 
                 $completedRound = $lockedRound->fresh(['currentTeam']);
-                $nextStarted = $this->autoStartNextRound($completedRound);
                 $this->broadcastTurnChanged(
                     $completedRound,
-                    $nextStarted ? 'Round completed. The next round has started.' : 'Round completed.'
+                    'Round completed.'
                 );
 
-                return ['success' => $nextStarted
-                    ? 'Pick completed. Round finished — next round started automatically.'
-                    : 'Pick completed. Draft round is now finished.'];
+                return ['success' => 'Pick completed. Draft round is now finished.'];
             }
 
             $lockedRound->update([
@@ -1063,7 +1060,6 @@ class TeamController extends Controller
             ]);
 
             $completedRound = $round->fresh(['currentTeam']);
-            $this->autoStartNextRound($completedRound);
             $this->broadcastTurnChanged($completedRound, 'Turn expired and the round has been completed.');
 
             return false;
