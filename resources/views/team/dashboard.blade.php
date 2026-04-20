@@ -382,19 +382,40 @@
             }, 15000);
         }
 
+        function disablePickButtons() {
+            document.querySelectorAll('form button[type="submit"]').forEach(function (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Please wait...';
+            });
+        }
+
+        // Disable pick buttons immediately on form submission to prevent double-picks
+        // and to clear stale UI state while the redirect is in-flight.
+        document.querySelectorAll('form[action*="/pick/"]').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                disablePickButtons();
+            });
+        });
+
         if (broadcastConfig.enabled && window.Echo) {
             window.Echo.channel(broadcastConfig.channel)
                 .listen('.draft.turn.changed', function (payload) {
+                    const isMyTurn = payload?.currentTeamId === broadcastConfig.teamId;
+
                     if (noticeElement && payload?.message) {
                         noticeElement.textContent = payload.message;
-                        noticeElement.className = (payload.currentTeamId === broadcastConfig.teamId)
+                        noticeElement.className = isMyTurn
                             ? 'alert alert-success py-2'
                             : 'alert alert-secondary py-2';
                     }
 
+                    if (!isMyTurn) {
+                        disablePickButtons();
+                    }
+
                     window.setTimeout(function () {
                         reloadPage();
-                    }, payload?.currentTeamId === broadcastConfig.teamId ? 700 : 300);
+                    }, isMyTurn ? 700 : 300);
                 });
         }
     });
