@@ -479,7 +479,7 @@ class TeamController extends Controller
             'category_id' => 'required|exists:categories,id',
             'higher_category_ids' => 'nullable|array',
             'higher_category_ids.*' => 'integer|exists:categories,id',
-            'turn_time_seconds' => 'required|integer|in:120,150,180,240,300',
+            'turn_time_seconds' => 'required|integer|in:30,60,120,150,180,240,300',
         ]);
 
         $leagueType = $this->normalizeLeagueType((string) $validated['league_type']);

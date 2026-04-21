@@ -298,6 +298,8 @@
                                             <div class="col-lg-2">
                                                 <label class="form-label">Turn Time</label>
                                                 <select name="turn_time_seconds" class="form-select" required>
+                                                    <option value="30">1/5 Minutes</option>
+                                                    <option value="60">1 Minutes</option>
                                                     <option value="120">2 Minutes</option>
                                                     <option value="150" selected>2.5 Minutes</option>
                                                     <option value="180">3 Minutes</option>
@@ -1174,6 +1176,8 @@
             const serverNowTs = timerElement ? parseInt(timerElement.dataset.serverNowTs || '0', 10) : Number.NaN;
             const clientNowTs = Math.floor(Date.now() / 1000);
             const serverClientOffsetSeconds = Number.isNaN(serverNowTs) ? 0 : serverNowTs - clientNowTs;
+            // Track the turn start timestamp known at page load to detect mid-turn picks.
+            const knownTurnStartedAtTs = timerElement ? parseInt(timerElement.dataset.turnStartedAtTs || '0', 10) : 0;
 
             function reloadPage() {
                 if (reloadScheduled) {
@@ -1239,7 +1243,7 @@
                 timerElement.textContent = remainingLabel;
             }
 
-            async function maybeSkipTurn() {
+            async function maybeSkipTurn(forceCheck = false) {
                 if (!timerElement || skipRequestInFlight) {
                     return;
                 }
@@ -1251,7 +1255,7 @@
                     return;
                 }
 
-                if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
+                if (!forceCheck && !Number.isNaN(secondsLeft) && secondsLeft > 0) {
                     return;
                 }
 
@@ -1300,6 +1304,15 @@
                         reloadPage();
                         return;
                     }
+
+                    // A pick happened before the timer expired: the server's
+                    // currentTurnStartedAtTs will differ from the page-load value.
+                    if (knownTurnStartedAtTs > 0 && data?.currentTurnStartedAtTs &&
+                        data.currentTurnStartedAtTs !== knownTurnStartedAtTs) {
+                        triggerGlobalDraftRefresh();
+                        reloadPage();
+                        return;
+                    }
                 } catch (error) {
                     console.warn('Draft turn tick request failed.', error);
                 } finally {
@@ -1324,6 +1337,13 @@
                 setInterval(function () {
                     maybeSkipTurn();
                 }, 15000);
+
+                // Poll every 10 seconds to detect mid-turn picks before the timer expires.
+                setInterval(function () {
+                    if (!reloadScheduled) {
+                        maybeSkipTurn(true);
+                    }
+                }, 10000);
             }
 
             window.addEventListener('storage', function (event) {
@@ -1344,7 +1364,6 @@
             const fallbackDraftCategoryButton = document.querySelector('#draftCategoryTabs .nav-link');
             const adminBroadcastConfig = @json($adminBroadcastConfig);
             const shouldAutoRefreshDraft = activeTopTab === 'draft';
-            const hasRealtimeDraftChannel = shouldAutoRefreshDraft && adminBroadcastConfig.enabled && !!window.Echo;
 
             if (draftCategoryButton) {
                 bootstrap.Tab.getOrCreateInstance(draftCategoryButton).show();
@@ -1352,7 +1371,7 @@
                 bootstrap.Tab.getOrCreateInstance(fallbackDraftCategoryButton).show();
             }
 
-            if (shouldAutoRefreshDraft && !hasRealtimeDraftChannel) {
+            if (shouldAutoRefreshDraft && !(adminBroadcastConfig.enabled && !!window.Echo)) {
                 setInterval(function () {
                     if (document.visibilityState === 'visible') {
                         reloadPage();
@@ -1360,9 +1379,12 @@
                 }, 15000);
             }
 
-            if (hasRealtimeDraftChannel) {
+            // Always register the broadcast listener regardless of which tab is active
+            // so picks and round completions are reflected immediately on every tab.
+            if (adminBroadcastConfig.enabled && !!window.Echo) {
                 window.Echo.channel(adminBroadcastConfig.channel)
                     .listen('.draft.turn.changed', function () {
+                        triggerGlobalDraftRefresh();
                         reloadPage();
                     });
             }

@@ -229,6 +229,7 @@
         'channel' => 'draft.league.' . ($teamLeagueType ?? 'male'),
         'teamId' => (int) $team->id,
         'hasActiveRound' => (bool) $activeRound,
+        'isTeamTurn' => (bool) $isTeamTurn,
     ];
 @endphp
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -243,6 +244,13 @@
         const serverNowTs = timerElement ? parseInt(timerElement.dataset.serverNowTs || '0', 10) : Number.NaN;
         const clientNowTs = Math.floor(Date.now() / 1000);
         const serverClientOffsetSeconds = Number.isNaN(serverNowTs) ? 0 : serverNowTs - clientNowTs;
+
+        function disablePickButtons() {
+            document.querySelectorAll('form button[type="submit"]').forEach(function (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Please wait...';
+            });
+        }
 
         function reloadPage() {
             if (reloadScheduled) {
@@ -298,7 +306,7 @@
             timerElement.textContent = remainingLabel;
         }
 
-        async function maybeAdvanceTurn() {
+        async function maybeAdvanceTurn(forceCheck = false) {
             if (!timerElement || tickRequestInFlight) {
                 return;
             }
@@ -310,7 +318,7 @@
                 return;
             }
 
-            if (!Number.isNaN(secondsLeft) && secondsLeft > 0) {
+            if (!forceCheck && !Number.isNaN(secondsLeft) && secondsLeft > 0) {
                 return;
             }
 
@@ -340,6 +348,15 @@
                 }
 
                 if (payload.advanced || payload.round_closed) {
+                    disablePickButtons();
+                    reloadPage();
+                    return;
+                }
+
+                // Turn did not expire but the active team changed (e.g. the other team
+                // picked before the timer ran out). If it is now this team's turn, reload
+                // so the page gets fresh HTML with enabled pick buttons.
+                if (payload?.currentTeamId && payload.currentTeamId === broadcastConfig.teamId) {
                     reloadPage();
                     return;
                 }
@@ -357,6 +374,7 @@
                 renderTimer();
 
                 if (secondsLeft === 0) {
+                    disablePickButtons();
                     maybeAdvanceTurn();
                 }
             }, 1000);
@@ -364,6 +382,16 @@
             setInterval(function () {
                 maybeAdvanceTurn();
             }, 15000);
+
+            // When it is not this team's turn, poll the server every 10 seconds so we
+            // detect a turn switch promptly without waiting for the client timer to hit 0.
+            if (!broadcastConfig.isTeamTurn && broadcastConfig.hasActiveRound) {
+                setInterval(function () {
+                    if (!reloadScheduled) {
+                        maybeAdvanceTurn(true);
+                    }
+                }, 10000);
+            }
         }
 
         if (!broadcastConfig.hasActiveRound) {
@@ -380,13 +408,6 @@
                     window.location.reload();
                 }
             }, 15000);
-        }
-
-        function disablePickButtons() {
-            document.querySelectorAll('form button[type="submit"]').forEach(function (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Please wait...';
-            });
         }
 
         // Disable pick buttons immediately on form submission to prevent double-picks
