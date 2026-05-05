@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,29 +10,30 @@
     <link rel="stylesheet" href="{{ asset('assets/css/admin-participant-detail.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
+
 <body>
     @include('partials.portal-navbar')
 
     <!-- Main Content -->
     <div class="container main-container">
         @if(session('success'))
-            <div class="alert alert-success">{{ session('success') }}</div>
+        <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
         @if(session('error'))
-            <div class="alert alert-danger">{{ session('error') }}</div>
+        <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
         @if(session('account_credentials'))
-            @php
-                $credentials = session('account_credentials');
-            @endphp
-            <div class="alert alert-warning">
-                <strong>{{ $credentials['label'] ?? 'New Account' }} Credentials:</strong>
-                <div>Email: <code>{{ $credentials['email'] ?? '' }}</code></div>
-                <div>Password: <code>{{ $credentials['password'] ?? '' }}</code></div>
-                <small class="text-muted">Share these once and ask user to change password after first login.</small>
-            </div>
+        @php
+        $credentials = session('account_credentials');
+        @endphp
+        <div class="alert alert-warning">
+            <strong>{{ $credentials['label'] ?? 'New Account' }} Credentials:</strong>
+            <div>Email: <code>{{ $credentials['email'] ?? '' }}</code></div>
+            <div>Password: <code>{{ $credentials['password'] ?? '' }}</code></div>
+            <small class="text-muted">Share these once and ask user to change password after first login.</small>
+        </div>
         @endif
 
         <!-- Header -->
@@ -109,13 +111,14 @@
                     </div>
                 </div>
 
-                <div class="section-title">Medical & Performance Information</div>
+                <!-- <div class="section-title">Medical & Performance Information</div>
                 <div class="info-row">
                     <div class="info-item" style="grid-column: 1 / -1;">
                         <span class="info-label">Medical Information</span>
                         <span class="info-value">{{ $participant->medical_info ?? 'N/A' }}</span>
                     </div>
-                </div>
+</div> -->
+
 
                 <div class="info-row">
                     <div class="info-item" style="grid-column: 1 / -1;">
@@ -169,11 +172,11 @@
                         <span class="info-label">Skill Categories</span>
                         <span class="info-value">
                             @if($participant->skill_categories && is_array($participant->skill_categories))
-                                @foreach($participant->skill_categories as $skill)
-                                    <span class="badge bg-primary me-2">{{ $skill }}</span>
-                                @endforeach
+                            @foreach($participant->skill_categories as $skill)
+                            <span class="badge bg-primary me-2">{{ $skill }}</span>
+                            @endforeach
                             @else
-                                N/A
+                            N/A
                             @endif
                         </span>
                     </div>
@@ -184,9 +187,9 @@
                         <span class="info-label">Category</span>
                         <span class="info-value">
                             @if($participant->category)
-                                <span class="badge bg-success">{{ $participant->category->name }}</span>
+                            <span class="badge bg-success">{{ $participant->category->name }}</span>
                             @else
-                                <span class="text-muted">Not assigned</span>
+                            <span class="text-muted">Not assigned</span>
                             @endif
                         </span>
                     </div>
@@ -241,98 +244,98 @@
             <div class="card-body">
                 <div class="file-section">
                     @if($participant->passport_picture)
-                        <div class="file-item">
-                            <div class="file-info">
-                                <div class="file-icon">
-                                    <i class="bi bi-file-image"></i>
-                                </div>
-                                <div class="file-details">
-                                    <h6>Passport Photo</h6>
-                                    <small>Image document</small>
-                                </div>
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-icon">
+                                <i class="bi bi-file-image"></i>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'passport']) }}', 'Passport Photo')">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                                <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'passport']) }}" class="file-download-btn">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
+                            <div class="file-details">
+                                <h6>Passport Photo</h6>
+                                <small>Image document</small>
                             </div>
                         </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'passport']) }}', 'Passport Photo')">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                            <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'passport']) }}" class="file-download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
                     @endif
 
                     @if($participant->id_picture)
-                        <div class="file-item">
-                            <div class="file-info">
-                                <div class="file-icon">
-                                    <i class="bi bi-file-image"></i>
-                                </div>
-                                <div class="file-details">
-                                    <h6>ID Picture</h6>
-                                    <small>Image document</small>
-                                </div>
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-icon">
+                                <i class="bi bi-file-image"></i>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'id']) }}', 'ID Picture')">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                                <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'id']) }}" class="file-download-btn">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
+                            <div class="file-details">
+                                <h6>ID Picture</h6>
+                                <small>Image document</small>
                             </div>
                         </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'id']) }}', 'ID Picture')">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                            <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'id']) }}" class="file-download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
                     @endif
 
                     @if($participant->hotel_reservation)
-                        <div class="file-item">
-                            <div class="file-info">
-                                <div class="file-icon">
-                                    <i class="bi bi-file-earmark-pdf"></i>
-                                </div>
-                                <div class="file-details">
-                                    <h6>Hotel Reservation</h6>
-                                    <small>PDF document</small>
-                                </div>
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-icon">
+                                <i class="bi bi-file-earmark-pdf"></i>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}', 'Hotel Reservation')">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                                <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}" class="file-download-btn">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
+                            <div class="file-details">
+                                <h6>Hotel Reservation</h6>
+                                <small>PDF document</small>
                             </div>
                         </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}', 'Hotel Reservation')">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                            <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}" class="file-download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
                     @endif
 
                     @if($participant->flight_reservation)
-                        <div class="file-item">
-                            <div class="file-info">
-                                <div class="file-icon">
-                                    <i class="bi bi-file-earmark-pdf"></i>
-                                </div>
-                                <div class="file-details">
-                                    <h6>Flight Reservation</h6>
-                                    <small>PDF document</small>
-                                </div>
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-icon">
+                                <i class="bi bi-file-earmark-pdf"></i>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'flight']) }}', 'Flight Reservation')">
-                                    <i class="bi bi-eye"></i> Preview
-                                </button>
-                                <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'flight']) }}" class="file-download-btn">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
+                            <div class="file-details">
+                                <h6>Flight Reservation</h6>
+                                <small>PDF document</small>
                             </div>
                         </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'flight']) }}', 'Flight Reservation')">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                            <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'flight']) }}" class="file-download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
                     @endif
 
                     @if(!$participant->passport_picture && !$participant->id_picture && !$participant->hotel_reservation && !$participant->flight_reservation)
-                        <div style="text-align: center; color: #9ca3af; padding: 20px;">
-                            <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
-                            No documents uploaded
-                        </div>
+                    <div style="text-align: center; color: #9ca3af; padding: 20px;">
+                        <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                        No documents uploaded
+                    </div>
                     @endif
                 </div>
             </div>
@@ -374,19 +377,19 @@
                 <h5 class="mb-3">Actions</h5>
                 <div class="action-buttons">
                     @if($participant->status === 'pending')
-                        <form method="POST" action="/admin/participants/{{ $participant->id }}/approve" style="margin: 0;">
-                            @csrf
-                            <button type="submit" class="action-btn success" onclick="return confirm('Approve this participant?')">
-                                <i class="bi bi-check-circle"></i> Approve
-                            </button>
-                        </form>
+                    <form method="POST" action="/admin/participants/{{ $participant->id }}/approve" style="margin: 0;">
+                        @csrf
+                        <button type="submit" class="action-btn success" onclick="return confirm('Approve this participant?')">
+                            <i class="bi bi-check-circle"></i> Approve
+                        </button>
+                    </form>
 
-                        <form method="POST" action="/admin/participants/{{ $participant->id }}/reject" style="margin: 0;">
-                            @csrf
-                            <button type="submit" class="action-btn danger" onclick="return confirm('Reject this participant?')">
-                                <i class="bi bi-x-circle"></i> Reject
-                            </button>
-                        </form>
+                    <form method="POST" action="/admin/participants/{{ $participant->id }}/reject" style="margin: 0;">
+                        @csrf
+                        <button type="submit" class="action-btn danger" onclick="return confirm('Reject this participant?')">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                    </form>
                     @endif
 
                     <form method="POST" action="/admin/participants/{{ $participant->id }}" style="margin: 0;">

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\DraftTurnChanged;
 use App\Models\Category;
 use App\Models\DraftPick;
 use App\Models\DraftRound;
@@ -11,6 +10,7 @@ use App\Models\LeagueRoundConfig;
 use App\Models\Participant;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\DraftService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +25,8 @@ class TeamController extends Controller
     private const LEAGUE_TYPE_MALE = 'male';
 
     private const LEAGUE_TYPE_FEMALE = 'female';
+
+    public function __construct(private readonly DraftService $draftService) {}
 
     private function availableLeagues()
     {
@@ -46,22 +48,7 @@ class TeamController extends Controller
 
     private function normalizeLeagueType(?string $leagueType): string
     {
-        $normalizedLeague = Str::of((string) $leagueType)->trim()->lower()->value();
-
-        $availableLeagueSlugs = League::query()
-            ->where('is_active', true)
-            ->pluck('slug')
-            ->map(fn ($slug) => (string) $slug)
-            ->filter()
-            ->values();
-
-        if ($availableLeagueSlugs->isEmpty()) {
-            return self::LEAGUE_TYPE_MALE;
-        }
-
-        return $availableLeagueSlugs->contains($normalizedLeague)
-            ? $normalizedLeague
-            : (string) $availableLeagueSlugs->first();
+        return $this->draftService->normalizeLeagueType($leagueType);
     }
 
     private function leagueLabel(string $leagueType): string
@@ -73,7 +60,7 @@ class TeamController extends Controller
 
     private function broadcastTurnChanged(DraftRound $round, ?string $message = null): void
     {
-        event(new DraftTurnChanged($round->fresh(['currentTeam']), $message));
+        $this->draftService->broadcastTurnChanged($round, $message);
     }
 
     /**
@@ -479,6 +466,7 @@ class TeamController extends Controller
             'category_id' => 'required|exists:categories,id',
             'higher_category_ids' => 'nullable|array',
             'higher_category_ids.*' => 'integer|exists:categories,id',
+            'picks_per_team' => 'required|integer|in:1',
             'turn_time_seconds' => 'required|integer|in:30,60,120,150,180,240,300',
         ]);
 
@@ -519,6 +507,9 @@ class TeamController extends Controller
             ->values()
             ->all();
 
+        $picksPerTeam = 1;
+        $totalPicksPlanned = count($pickOrder);
+
         $round = DraftRound::create([
             'league_type' => $leagueType,
             'category_id' => (int) $validated['category_id'],
@@ -526,10 +517,10 @@ class TeamController extends Controller
             'current_team_id' => $pickOrder[0],
             'pick_order' => $pickOrder,
             'higher_category_ids' => $higherCategoryIds,
-            'picks_per_team' => 1,
+            'picks_per_team' => $picksPerTeam,
             'turn_time_seconds' => (int) $validated['turn_time_seconds'],
             'current_pick_number' => 1,
-            'total_picks_planned' => count($pickOrder),
+            'total_picks_planned' => $totalPicksPlanned,
             'current_turn_started_at' => now(),
             'status' => 'active',
         ]);
@@ -558,111 +549,15 @@ class TeamController extends Controller
             abort(403, 'Unauthorized.');
         }
 
-        $linkedTeamId = Team::query()
-            ->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])
-            ->value('id');
+        $actingTeamId = null;
 
-        $result = DB::transaction(function () use ($round, $participant, $user, $linkedTeamId) {
-            $lockedRound = DraftRound::query()->lockForUpdate()->findOrFail($round->id);
+        if (! $user->isAdmin()) {
+            $actingTeamId = Team::query()
+                ->whereRaw('LOWER(email) = ?', [strtolower((string) $user->email)])
+                ->value('id');
+        }
 
-            if ($lockedRound->status !== 'active') {
-                return ['error' => 'This draft round is already closed.'];
-            }
-
-            if ($this->isTurnExpired($lockedRound)) {
-                $this->advanceTurnOrComplete($lockedRound);
-
-                return ['error' => 'Turn time expired. Turn has been auto-skipped to the next team.'];
-            }
-
-            $lockedParticipant = Participant::query()->lockForUpdate()->findOrFail($participant->id);
-
-            if ($lockedParticipant->status !== 'approved') {
-                return ['error' => 'Only approved participants can be drafted.'];
-            }
-
-            if ($lockedParticipant->team_id !== null) {
-                return ['error' => 'This player is already drafted by another team.'];
-            }
-
-            if ($this->normalizeLeagueType((string) $lockedParticipant->league_type) !== $this->normalizeLeagueType((string) $lockedRound->league_type)) {
-                return ['error' => 'This player belongs to a different league.'];
-            }
-
-            $eligibleCategoryIds = $this->getEligibleCategoryIds($lockedRound);
-
-            if ($lockedParticipant->category_id === null || ! in_array((int) $lockedParticipant->category_id, $eligibleCategoryIds, true)) {
-                return ['error' => 'This player is not eligible for the active draft round category rules.'];
-            }
-
-            $currentTeam = Team::query()->lockForUpdate()->findOrFail($lockedRound->current_team_id);
-
-            if ($this->normalizeLeagueType((string) $currentTeam->league_type) !== $this->normalizeLeagueType((string) $lockedRound->league_type)) {
-                return ['error' => 'Current round team league does not match the active round league.'];
-            }
-
-            if (! $user->isAdmin() && (int) $linkedTeamId !== (int) $currentTeam->id) {
-                return ['error' => 'It is not your team turn to pick right now.'];
-            }
-
-            if ($currentTeam->participants()->count() >= $currentTeam->max_players) {
-                return ['error' => 'Current team roster is full. Update max players or close this round.'];
-            }
-
-            $currentTeamRoundPicks = DraftPick::query()
-                ->where('draft_round_id', $lockedRound->id)
-                ->where('team_id', $currentTeam->id)
-                ->count();
-
-            if ($currentTeamRoundPicks >= $lockedRound->picks_per_team) {
-                return ['error' => 'Current team has already completed picks for this round.'];
-            }
-
-            DraftPick::create([
-                'draft_round_id' => $lockedRound->id,
-                'team_id' => $currentTeam->id,
-                'participant_id' => $lockedParticipant->id,
-                'pick_number' => (int) $lockedRound->current_pick_number,
-                'picked_at' => now(),
-            ]);
-
-            $lockedParticipant->update([
-                'team_id' => $currentTeam->id,
-                'drafted_at' => now(),
-            ]);
-
-            $nextTeamId = $this->findNextTeamId($lockedRound);
-
-            if ($nextTeamId === null) {
-                $lockedRound->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                    'current_turn_started_at' => null,
-                ]);
-
-                $completedRound = $lockedRound->fresh(['currentTeam']);
-                $this->broadcastTurnChanged(
-                    $completedRound,
-                    'Round completed.'
-                );
-
-                return ['success' => 'Pick completed. Draft round is now finished.'];
-            }
-
-            $lockedRound->update([
-                'current_team_id' => $nextTeamId,
-                'current_pick_number' => (int) $lockedRound->current_pick_number + 1,
-                'current_turn_started_at' => now(),
-            ]);
-
-            $nextRoundState = $lockedRound->fresh(['currentTeam']);
-            $this->broadcastTurnChanged(
-                $nextRoundState,
-                ($nextRoundState->currentTeam?->name ?? 'The next team').' is now on the clock.'
-            );
-
-            return ['success' => 'Pick completed successfully.'];
-        });
+        $result = $this->draftService->pick($round, $participant, $actingTeamId);
 
         if (isset($result['error'])) {
             return back()->with('error', $result['error']);
@@ -676,68 +571,14 @@ class TeamController extends Controller
      */
     public function tickRound(DraftRound $round)
     {
-        $result = DB::transaction(function () use ($round) {
-            $lockedRound = DraftRound::query()->lockForUpdate()->findOrFail($round->id);
+        $result = $this->draftService->tick($round);
 
-            if ($lockedRound->status !== 'active') {
-                return [
-                    'advanced' => false,
-                    'round_closed' => true,
-                    'message' => 'Round is already closed.',
-                    'roundId' => (int) $lockedRound->id,
-                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
-                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
-                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
-                ];
-            }
-
-            if (! $lockedRound->current_turn_started_at) {
-                $lockedRound->update([
-                    'current_turn_started_at' => now(),
-                ]);
-
-                $lockedRound->refresh();
-
-                return [
-                    'advanced' => false,
-                    'round_closed' => false,
-                    'message' => 'Turn timer was reset because the previous timer state was missing.',
-                    'roundId' => (int) $lockedRound->id,
-                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
-                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
-                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
-                ];
-            }
-
-            if (! $this->isTurnExpired($lockedRound)) {
-                return [
-                    'advanced' => false,
-                    'round_closed' => false,
-                    'message' => 'Turn is still active.',
-                    'roundId' => (int) $lockedRound->id,
-                    'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
-                    'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
-                    'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
-                ];
-            }
-
-            $advanced = $this->advanceTurnOrComplete($lockedRound);
-            $lockedRound->refresh();
-
-            return [
-                'advanced' => $advanced,
-                'round_closed' => ! $advanced,
-                'message' => $advanced
-                    ? 'Turn expired and moved to next team.'
-                    : 'Turn expired and round completed.',
-                'roundId' => (int) $lockedRound->id,
-                'currentTeamId' => $lockedRound->current_team_id ? (int) $lockedRound->current_team_id : null,
-                'currentTurnStartedAtTs' => $lockedRound->current_turn_started_at?->timestamp,
-                'turnTimeSeconds' => (int) $lockedRound->turn_time_seconds,
-            ];
-        });
-
-        return response()->json($result);
+        return response()->json(array_merge($result, [
+            'roundId' => (int) $round->id,
+            'message' => $result['advanced']
+                ? 'Turn expired and moved to next team.'
+                : ($result['round_closed'] ? 'Round is already closed.' : 'Turn is still active.'),
+        ]));
     }
 
     /**
@@ -947,13 +788,7 @@ class TeamController extends Controller
      */
     private function getEligibleCategoryIds(DraftRound $round): array
     {
-        return collect([$round->category_id])
-            ->merge($round->higher_category_ids ?? [])
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        return $this->draftService->getEligibleCategoryIds($round);
     }
 
     /**
@@ -961,25 +796,7 @@ class TeamController extends Controller
      */
     private function findNextTeamId(DraftRound $round): ?int
     {
-        $order = collect($round->pick_order)
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
-            ->values()
-            ->all();
-
-        if (empty($order)) {
-            return null;
-        }
-
-        $nextPickNumber = (int) $round->current_pick_number + 1;
-
-        if ($nextPickNumber > (int) $round->total_picks_planned) {
-            return null;
-        }
-
-        $nextIndex = $nextPickNumber - 1;
-
-        return $order[$nextIndex] ?? null;
+        return $this->draftService->findNextTeamId($round);
     }
 
     /**
@@ -1037,11 +854,7 @@ class TeamController extends Controller
      */
     private function isTurnExpired(DraftRound $round): bool
     {
-        if (! $round->current_turn_started_at) {
-            return false;
-        }
-
-        return abs(Carbon::now()->diffInSeconds($round->current_turn_started_at)) >= (int) $round->turn_time_seconds;
+        return $this->draftService->isTurnExpired($round);
     }
 
     /**
@@ -1050,34 +863,7 @@ class TeamController extends Controller
      */
     private function advanceTurnOrComplete(DraftRound $round): bool
     {
-        $nextTeamId = $this->findNextTeamId($round);
-
-        if ($nextTeamId === null) {
-            $round->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'current_turn_started_at' => null,
-            ]);
-
-            $completedRound = $round->fresh(['currentTeam']);
-            $this->broadcastTurnChanged($completedRound, 'Turn expired and the round has been completed.');
-
-            return false;
-        }
-
-        $round->update([
-            'current_team_id' => $nextTeamId,
-            'current_pick_number' => (int) $round->current_pick_number + 1,
-            'current_turn_started_at' => now(),
-        ]);
-
-        $updatedRound = $round->fresh(['currentTeam']);
-        $this->broadcastTurnChanged(
-            $updatedRound,
-            ($updatedRound->currentTeam?->name ?? 'The next team').' is now on the clock.'
-        );
-
-        return true;
+        return $this->draftService->advanceTurnOrComplete($round);
     }
 
     // -----------------------------------------------------------------------
@@ -1125,10 +911,10 @@ class TeamController extends Controller
             'current_team_id' => $pickOrder[0],
             'pick_order' => $pickOrder,
             'higher_category_ids' => $completedRound->higher_category_ids,
-            'picks_per_team' => 1,
+            'picks_per_team' => $completedRound->picks_per_team,
             'turn_time_seconds' => $completedRound->turn_time_seconds,
             'current_pick_number' => 1,
-            'total_picks_planned' => count($pickOrder),
+            'total_picks_planned' => count($pickOrder) * (int) $completedRound->picks_per_team,
             'current_turn_started_at' => now(),
             'status' => 'active',
         ]);
