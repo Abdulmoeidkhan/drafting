@@ -108,6 +108,62 @@
             word-break: break-word;
         }
 
+        .personal-info-layout {
+            display: grid;
+            grid-template-columns: 1fr 220px;
+            gap: 32px;
+            align-items: start;
+        }
+
+        .personal-info-details {
+            min-width: 0;
+        }
+
+        .participant-photo-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .value-action-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .participant-photo {
+            width: 220px;
+            height: 220px;
+            border-radius: 16px;
+            object-fit: cover;
+            object-position: top;
+            border: 4px solid #e5e7eb;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+            background: #f9fafb;
+            display: block;
+        }
+
+        .participant-photo-placeholder {
+            width: 220px;
+            height: 220px;
+            border-radius: 16px;
+            border: 2px dashed #cbd5e1;
+            background: #f8fafc;
+            color: #64748b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-align: center;
+            padding: 16px;
+        }
+
+        .participant-photo-placeholder i {
+            font-size: 3rem;
+        }
+
         /* Status Badge */
         .status-badge {
             display: inline-block;
@@ -206,6 +262,31 @@
         .file-download-btn.disabled {
             background: #d1d5db;
             cursor: not-allowed;
+        }
+
+        @media (max-width: 992px) {
+            .personal-info-layout {
+                flex-direction: column;
+            }
+
+            .participant-photo-panel {
+                flex-basis: auto;
+                width: 100%;
+                align-items: flex-start;
+                margin-left: 0;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .participant-photo,
+            .participant-photo-placeholder {
+                width: 100%;
+                height: 260px;
+            }
+
+            .value-action-row {
+                flex-wrap: wrap;
+            }
         }
 
         /* Action Buttons */

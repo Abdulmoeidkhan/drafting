@@ -60,54 +60,80 @@
                 <h2><i class="bi bi-person"></i> Personal Information</h2>
             </div>
             <div class="card-body">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="info-label">Full Name</span>
-                        <span class="info-value">{{ $participant->first_name }} {{ $participant->last_name }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Nick Name</span>
-                        <span class="info-value">{{ $participant->nick_name }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Email</span>
-                        <span class="info-value">{{ $participant->email }}</span>
-                    </div>
-                </div>
+                <div class="personal-info-layout">
+                    <div class="personal-info-details">
+                        <div class="info-row">
+                            <div class="info-item">
+                                <span class="info-label">Full Name</span>
+                                <span class="info-value">{{ $participant->first_name }} {{ $participant->last_name }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Nick Name</span>
+                                <span class="info-value">{{ $participant->nick_name }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Email</span>
+                                <span class="info-value">{{ $participant->email }}</span>
+                            </div>
+                        </div>
 
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="info-label">Phone (Encrypted)</span>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span class="info-value" id="mobileValue">••••••••{{ substr($participant->mobile, -4) }}</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="mobileToggle" onclick="toggleMobile()">
-                                <i class="bi bi-eye"></i>
-                            </button>
+                        <div class="info-row">
+                            <div class="info-item">
+                                <span class="info-label">Phone (Encrypted)</span>
+                                <div class="value-action-row">
+                                    <span class="info-value" id="mobileValue">••••••••{{ substr($participant->mobile, -4) }}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="mobileToggle" onclick="toggleMobile()">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Emergency Contact (Encrypted)</span>
+                                <div class="value-action-row">
+                                    <span class="info-value" id="emergencyValue">••••••••{{ substr($participant->emergency_contact, -4) }}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="emergencyToggle" onclick="toggleEmergency()">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Date of Birth</span>
+                                <span class="info-value">{{ \Carbon\Carbon::parse($participant->dob)->format('M d, Y') }}</span>
+                            </div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-item">
+                                <span class="info-label">Nationality</span>
+                                <span class="info-value">{{ $participant->nationality }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">League</span>
+                                <span class="info-value">{{ ucfirst((string) ($participant->league_type ?? 'male')) }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Performance</span>
+                                <span class="info-value">{{ $participant->performance ?? 'N/A' }}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">Emergency Contact (Encrypted)</span>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span class="info-value" id="emergencyValue">••••••••{{ substr($participant->emergency_contact, -4) }}</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="emergencyToggle" onclick="toggleEmergency()">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Date of Birth</span>
-                        <span class="info-value">{{ \Carbon\Carbon::parse($participant->dob)->format('M d, Y') }}</span>
-                    </div>
-                </div>
 
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="info-label">Nationality</span>
-                        <span class="info-value">{{ $participant->nationality }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">League</span>
-                        <span class="info-value">{{ ucfirst((string) ($participant->league_type ?? 'male')) }}</span>
+                    <div class="participant-photo-panel">
+                        <span class="info-label">Participant Photo</span>
+                        @php
+                        $participantPhoto = $participant->passport_picture ?: $participant->id_picture;
+                        @endphp
+                        @if($participantPhoto)
+                        <img
+                            src="{{ asset('storage/' . ltrim($participantPhoto, '/')) }}"
+                            alt="{{ $participant->full_name }}"
+                            class="participant-photo">
+                        @else
+                        <div class="participant-photo-placeholder">
+                            <i class="bi bi-person-badge"></i>
+                            <span>No photo uploaded</span>
+                        </div>
+                        @endif
                     </div>
                 </div>
 
@@ -119,13 +145,6 @@
                     </div>
 </div> -->
 
-
-                <div class="info-row">
-                    <div class="info-item" style="grid-column: 1 / -1;">
-                        <span class="info-label">Performance</span>
-                        <span class="info-value">{{ $participant->performance ?? 'N/A' }}</span>
-                    </div>
-                </div>
 
                 <div class="section-title">Address Information</div>
                 <div class="info-row">
