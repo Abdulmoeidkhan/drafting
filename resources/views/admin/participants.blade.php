@@ -106,7 +106,7 @@
                                                 src="{{ asset('storage/' . ltrim($participant->passport_picture, '/')) }}"
                                                 alt="{{ $participant->full_name }}"
                                                 class="rounded"
-                                                style="width: 46px; height: 46px; object-fit: cover;"
+                                                style="width: 150px; height: 150px; object-fit: cover;"
                                             >
                                         @else
                                             <span class="badge text-bg-secondary">No Photo</span>
