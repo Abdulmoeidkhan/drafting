@@ -1,10 +1,10 @@
 :root {
-            --primary: #192E9A;
-            --secondary: #192E4A;
+            --primary: #007342;
+            --secondary: #9FC210;
         }
 
         body {
-            background: linear-gradient(135deg, #192E9A 0%, #192E4A 100%);
+            background: linear-gradient(135deg, #007342 0%, #9FC210 100%);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
             padding: 20px 0;
@@ -24,6 +24,12 @@
             text-align: center
         }
 
+        .form-logo {
+            width: 110px;
+            max-width: 100%;
+            margin-bottom: 12px;
+        }
+
         .form-body {
             padding: 28px
         }
@@ -38,7 +44,11 @@
             border-radius: 8px;
             padding: 20px;
             text-align: center;
-            background: #f8f9ff
+            background: #f6fbf8
+        }
+
+        .app-navbar {
+            background: linear-gradient(135deg, #007342 0%, #9FC210 100%) !important;
         }
 
         .file-preview {

@@ -16,6 +16,7 @@
     <div class="container main-container">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <div>
+                <img src="{{ asset('images/logo.webp') }}" alt="Tournament Logo" class="form-logo mb-2">
                 <h1 class="text-white mb-2">Edit Participant</h1>
                 <p class="text-white-50">
                     <a href="{{ route('admin.participant.view', $participant->id) }}" class="text-white-50">← Back to Details</a>

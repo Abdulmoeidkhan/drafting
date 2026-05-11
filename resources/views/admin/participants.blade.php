@@ -36,6 +36,7 @@
 
         <!-- Page Header -->
         <div class="page-header">
+            <img src="{{ asset('images/logo.webp') }}" alt="Tournament Logo" class="page-logo">
             <h1><i class="bi bi-people"></i> Participants Management</h1>
             <p>View, approve, and manage participant submissions</p>
         </div>

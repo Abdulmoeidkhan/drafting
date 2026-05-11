@@ -39,6 +39,7 @@
         <!-- Header -->
         <div class="d-flex align-items-center justify-content-between mb-4">
             <div>
+                <img src="{{ asset('images/logo.webp') }}" alt="Tournament Logo" class="page-logo">
                 <h1 class="text-white mb-2">{{ $participant->first_name }} {{ $participant->last_name }}</h1>
                 <p class="text-white-50">
                     <a href="/admin/participants" class="text-white-50">← Back to Participants</a>
@@ -274,7 +275,7 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'passport']) }}', 'Passport Photo')">
+                            <button type="button" class="file-download-btn" style="background: #007342;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'passport']) }}', 'Passport Photo')">
                                 <i class="bi bi-eye"></i> Preview
                             </button>
                             <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'passport']) }}" class="file-download-btn">
@@ -296,7 +297,7 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'id']) }}', 'ID Picture')">
+                            <button type="button" class="file-download-btn" style="background: #007342;" onclick="previewImage('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'id']) }}', 'ID Picture')">
                                 <i class="bi bi-eye"></i> Preview
                             </button>
                             <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'id']) }}" class="file-download-btn">
@@ -318,7 +319,7 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}', 'Hotel Reservation')">
+                            <button type="button" class="file-download-btn" style="background: #007342;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}', 'Hotel Reservation')">
                                 <i class="bi bi-eye"></i> Preview
                             </button>
                             <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'hotel']) }}" class="file-download-btn">
@@ -340,7 +341,7 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" class="file-download-btn" style="background: #7c3aed;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'flight']) }}', 'Flight Reservation')">
+                            <button type="button" class="file-download-btn" style="background: #007342;" onclick="previewPDF('{{ route('admin.participant.preview', ['participantId' => $participant->id, 'fileType' => 'flight']) }}', 'Flight Reservation')">
                                 <i class="bi bi-eye"></i> Preview
                             </button>
                             <a href="{{ route('admin.participant.download', ['participantId' => $participant->id, 'fileType' => 'flight']) }}" class="file-download-btn">
