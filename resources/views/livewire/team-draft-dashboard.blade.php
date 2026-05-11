@@ -133,6 +133,7 @@
                         <th>Pick #</th>
                         <th>Team</th>
                         <th>Player</th>
+                        <th>Image</th>
                         <th>Skill Category</th>
                     </tr>
                 </thead>
@@ -144,6 +145,15 @@
                             <td>{{ $activity->pick_number }}</td>
                             <td>{{ $activity->team?->name ?: 'N/A' }}</td>
                             <td>{{ $activity->participant?->full_name ?: 'N/A' }}</td>
+                            <td>
+                                @if($activity->participant?->id_picture)
+                                    <img src="{{ asset($activity->participant->id_picture) }}" alt="Player Image" class="img-thumbnail" style="max-width: 100px; max-height: 100px;">
+                                @else
+                                    <div class="bg-secondary text-white d-flex align-items-center justify-content-center rounded" style="width: 50px; height: 50px;">
+                                        <i class="bi bi-person" style="font-size: 1rem;"></i>
+                                    </div>
+                                @endif
+                            </td>
                             <td>
                                 @php
                                     $activityMainCategory = $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized');

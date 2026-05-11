@@ -25,11 +25,25 @@
 
     <div class="card mb-4">
         <div class="card-body">
-            <h4 class="mb-2">{{ $team->name }}</h4>
-            <p class="mb-1"><strong>Email:</strong> {{ $team->email }}</p>
-            <p class="mb-1"><strong>League:</strong> {{ $teamLeagueLabel ?? ucfirst((string) ($teamLeagueType ?? $team->league_type ?? 'male')) }}</p>
-            <p class="mb-1"><strong>Captain:</strong> {{ $team->captain_name ?: 'Not set' }}</p>
-            <p class="mb-0"><strong>Roster:</strong> {{ $participants->count() }} / {{ $team->max_players }}</p>
+            <h3 class="mb-2 text-center">{{ $team->name }}</h3>
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="mb-1"><strong>Email:</strong> {{ $team->email }}</p>
+                    <p class="mb-1"><strong>League:</strong> {{ $teamLeagueLabel ?? ucfirst((string) ($teamLeagueType ?? $team->league_type ?? 'male')) }}</p>
+                    <p class="mb-1"><strong>Captain:</strong> {{ $team->captain_name ?: 'Not set' }}</p>
+                    <p class="mb-0"><strong>Roster:</strong> {{ $participants->count() }} / {{ $team->max_players }}</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex flex-column align-items-center">
+                        @if($team->logo)
+                            <img src="{{ asset($team->logo) }}" alt="Team Logo" class="img-thumbnail mb-3" style="max-width: 150px; max-height: 150px;">
+                        @else
+                            <div class="bg-secondary text-white d-flex align-items-center justify-content-center rounded mb-3" style="width: 150px; height: 150px;">
+                                <i class="bi bi-image" style="font-size: 2rem;"></i>
+                            </div>
+                        @endif
+                </div>
+            </div>
         </div>
     </div>
 
@@ -51,6 +65,7 @@
                             <th>Pick #</th>
                             <th>Team</th>
                             <th>Player</th>
+                            <th>Image</th>
                             <th>Skill Category</th>
                         </tr>
                     </thead>
@@ -62,6 +77,15 @@
                                 <td>{{ $activity->pick_number }}</td>
                                 <td>{{ $activity->team?->name ?: 'N/A' }}</td>
                                 <td>{{ $activity->participant?->full_name ?: 'N/A' }}</td>
+                                <td>
+                                    @if($activity->participant?->image)
+                                        <img src="{{ asset($activity->participant->image) }}" alt="Player Image" class="img-thumbnail" style="max-width: 50px; max-height: 50px;">
+                                    @else
+                                        <div class="bg-secondary text-white d-flex align-items-center justify-content-center rounded" style="width: 50px; height: 50px;">
+                                            <i class="bi bi-person" style="font-size: 1rem;"></i>
+                                        </div>
+                                    @endif
+                                </td>
                                 <td>
                                     @php
                                         $activityMainCategory = $activity->round?->category?->name ?: ($activity->participant?->category?->name ?: 'Uncategorized');
