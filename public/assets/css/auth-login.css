@@ -1,5 +1,5 @@
 body {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            background: linear-gradient(135deg, #007342 0%, #9FC210 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -21,9 +21,19 @@ body {
             margin-bottom: 30px;
         }
 
+        .login-logo {
+            width: 100px;
+            height: auto;
+            max-width: 100%;
+            margin-bottom: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
         .login-header h1 {
             font-size: 2rem;
-            color: #4f46e5;
+            color: #007342;
             font-weight: 700;
             margin-bottom: 10px;
         }
@@ -52,13 +62,13 @@ body {
         }
 
         .form-control:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.15);
-            background-color: #f8f9ff;
+            border-color: #007342;
+            box-shadow: 0 0 0 0.2rem rgba(0, 115, 66, 0.15);
+            background-color: #f0f8f3;
         }
 
         .btn-login {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            background: linear-gradient(135deg, #007342 0%, #9FC210 100%);
             color: white;
             border: none;
             border-radius: 8px;
@@ -69,7 +79,7 @@ body {
         }
 
         .btn-login:hover {
-            box-shadow: 0 5px 20px rgba(79, 70, 229, 0.4);
+            box-shadow: 0 5px 20px rgba(0, 115, 66, 0.4);
             transform: translateY(-2px);
             color: white;
         }
@@ -92,7 +102,7 @@ body {
         }
 
         .form-link a {
-            color: #4f46e5;
+            color: #007342;
             text-decoration: none;
             font-weight: 600;
         }
