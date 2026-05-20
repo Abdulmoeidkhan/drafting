@@ -36,7 +36,7 @@
                 <div class="col-md-4">
                     <div class="d-flex flex-column align-items-center">
                         @if($team->logo)
-                            <img src="{{ asset($team->logo) }}" alt="Team Logo" class="img-thumbnail mb-3" style="max-width: 150px; max-height: 150px;">
+                            <img src="{{ asset('storage/' . ltrim($team->logo, '/')) }}" alt="Team Logo" class="img-thumbnail mb-3" style="max-width: 150px; max-height: 150px;">
                         @else
                             <div class="bg-secondary text-white d-flex align-items-center justify-content-center rounded mb-3" style="width: 150px; height: 150px;">
                                 <i class="bi bi-image" style="font-size: 2rem;"></i>
@@ -78,8 +78,9 @@
                                 <td>{{ $activity->team?->name ?: 'N/A' }}</td>
                                 <td>{{ $activity->participant?->full_name ?: 'N/A' }}</td>
                                 <td>
-                                    @if($activity->participant?->image)
-                                        <img src="{{ asset($activity->participant->image) }}" alt="Player Image" class="img-thumbnail" style="max-width: 50px; max-height: 50px;">
+                                    @php $activityPlayerPhoto = $activity->participant?->passport_picture ?: $activity->participant?->id_picture; @endphp
+                                    @if($activityPlayerPhoto)
+                                        <img src="{{ asset('storage/' . ltrim($activityPlayerPhoto, '/')) }}" alt="Player Image" class="img-thumbnail" style="max-width: 50px; max-height: 50px;">
                                     @else
                                         <div class="bg-secondary text-white d-flex align-items-center justify-content-center rounded" style="width: 50px; height: 50px;">
                                             <i class="bi bi-person" style="font-size: 1rem;"></i>

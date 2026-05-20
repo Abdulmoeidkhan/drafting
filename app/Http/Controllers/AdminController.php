@@ -9,6 +9,7 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -198,6 +199,24 @@ class AdminController extends Controller
         $user->syncRoles($selectedRoles);
 
         return back()->with('success', 'User updated successfully');
+    }
+
+    /**
+     * Reset user password
+     */
+    public function resetUserPassword($id, Request $request)
+    {
+        $user = User::findOrFail($id);
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return back()->with('success', 'User password reset successfully');
     }
 
     /**

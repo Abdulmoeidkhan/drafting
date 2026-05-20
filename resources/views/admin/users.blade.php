@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ asset('assets/css/admin-users.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/navbar.css') }}">
 </head>
-<body>
+<body data-should-reopen-reset-modal="{{ $errors->any() && old('_form') === 'reset_password' && old('user_id') ? '1' : '0' }}" data-old-reset-user-id="{{ old('user_id', '') }}">
     @include('partials.portal-navbar')
 
     <!-- Main Content -->
@@ -24,6 +24,32 @@
                 <i class="bi bi-person-plus"></i> Add New User
             </button>
         </div>
+
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        @if(session('error'))
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Action failed.</strong>
+                <ul class="mb-0 mt-2">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
 
         <!-- Users List -->
         @if($users->count() > 0)
@@ -79,6 +105,16 @@
                                 >
                                     <i class="bi bi-pencil"></i> Edit
                                 </button>
+                                <button
+                                    class="action-btn-small"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#resetPasswordModal"
+                                    data-id="{{ $user->id }}"
+                                    data-name="{{ $user->name }}"
+                                    onclick="openResetPasswordModal(this)"
+                                >
+                                    <i class="bi bi-key"></i> Reset Password
+                                </button>
                                 @if(auth()->user()->id !== $user->id)
                                     <form method="POST" action="/admin/users/{{ $user->id }}" style="display: inline;">
                                         @csrf
@@ -112,6 +148,7 @@
                 </div>
                 <form method="POST" action="/admin/users">
                     @csrf
+                    <input type="hidden" name="_form" value="create_user">
                     <div class="modal-body">
                         <div class="mb-3">
                             <label for="name" class="form-label">Full Name</label>
@@ -123,11 +160,21 @@
                         </div>
                         <div class="mb-3">
                             <label for="password" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" required>
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="password" onclick="togglePassword(this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="password_confirmation" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="password_confirmation" onclick="togglePassword(this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Assign Roles</label>
@@ -191,6 +238,49 @@
         </div>
     </div>
 
+    <!-- Reset Password Modal -->
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-key"></i> Reset User Password</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" id="resetPasswordForm">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="_form" value="reset_password">
+                    <input type="hidden" name="user_id" id="reset_user_id">
+                    <div class="modal-body">
+                        <p class="mb-3">Set a new password for <strong id="resetPasswordUserName"></strong>.</p>
+                        <div class="mb-3">
+                            <label for="reset_password" class="form-label">New Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="reset_password" name="password" required minlength="8">
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="reset_password" onclick="togglePassword(this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reset_password_confirmation" class="form-label">Confirm New Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="reset_password_confirmation" name="password_confirmation" required minlength="8">
+                                <button type="button" class="btn btn-outline-secondary toggle-password" data-target="reset_password_confirmation" onclick="togglePassword(this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function editUser(button) {
@@ -205,6 +295,49 @@
 
             document.querySelectorAll('.edit-role-checkbox').forEach((checkbox) => {
                 checkbox.checked = roles.includes(checkbox.value);
+            });
+        }
+
+        function openResetPasswordModal(button) {
+            const id = button.dataset.id;
+            const name = button.dataset.name;
+
+            document.getElementById('resetPasswordForm').action = '/admin/users/' + id + '/password';
+            document.getElementById('reset_user_id').value = id;
+            document.getElementById('resetPasswordUserName').innerText = name;
+            document.getElementById('reset_password').value = '';
+            document.getElementById('reset_password_confirmation').value = '';
+        }
+
+        function togglePassword(button) {
+            const targetInput = document.getElementById(button.dataset.target);
+
+            if (!targetInput) {
+                return;
+            }
+
+            const icon = button.querySelector('i');
+            const isHidden = targetInput.type === 'password';
+            targetInput.type = isHidden ? 'text' : 'password';
+
+            if (icon) {
+                icon.classList.toggle('bi-eye', !isHidden);
+                icon.classList.toggle('bi-eye-slash', isHidden);
+            }
+        }
+
+        const shouldReopenResetModal = document.body.dataset.shouldReopenResetModal === '1';
+        const oldResetUserId = document.body.dataset.oldResetUserId;
+
+        if (shouldReopenResetModal && oldResetUserId) {
+            document.addEventListener('DOMContentLoaded', function () {
+                const form = document.getElementById('resetPasswordForm');
+                form.action = '/admin/users/' + oldResetUserId + '/password';
+                document.getElementById('reset_user_id').value = oldResetUserId;
+
+                const resetModalElement = document.getElementById('resetPasswordModal');
+                const resetModal = new bootstrap.Modal(resetModalElement);
+                resetModal.show();
             });
         }
     </script>
