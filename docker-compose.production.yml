@@ -1,0 +1,101 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+      args:
+        VITE_APP_NAME: "${VITE_APP_NAME:-Participant Management System}"
+        VITE_REVERB_APP_KEY: "${VITE_REVERB_APP_KEY:-}"
+        VITE_REVERB_HOST: "${VITE_REVERB_HOST:-localhost}"
+        VITE_REVERB_PORT: "${VITE_REVERB_PORT:-443}"
+        VITE_REVERB_SCHEME: "${VITE_REVERB_SCHEME:-https}"
+    image: participant-management-system:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - app-storage:/var/www/html/storage
+      - app-cache:/var/www/html/bootstrap/cache
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  queue:
+    image: participant-management-system:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      RUN_MIGRATIONS: "false"
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--timeout=90"]
+    volumes:
+      - app-storage:/var/www/html/storage
+      - app-cache:/var/www/html/bootstrap/cache
+    depends_on:
+      app:
+        condition: service_healthy
+
+  reverb:
+    image: participant-management-system:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      RUN_MIGRATIONS: "false"
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    volumes:
+      - app-storage:/var/www/html/storage
+      - app-cache:/var/www/html/bootstrap/cache
+    depends_on:
+      app:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_APP_NAME: "${VITE_APP_NAME:-Participant Management System}"
+        VITE_REVERB_APP_KEY: "${VITE_REVERB_APP_KEY:-}"
+        VITE_REVERB_HOST: "${VITE_REVERB_HOST:-localhost}"
+        VITE_REVERB_PORT: "${VITE_REVERB_PORT:-443}"
+        VITE_REVERB_SCHEME: "${VITE_REVERB_SCHEME:-https}"
+    image: participant-management-system-web:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-80}:80"
+      - "${REVERB_PUBLIC_PORT:-8080}:8080"
+    volumes:
+      - app-storage:/var/www/html/storage:ro
+    depends_on:
+      app:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+
+  database:
+    image: mariadb:11.4
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - database-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  app-storage:
+  app-cache:
+  database-data:
