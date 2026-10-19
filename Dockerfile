@@ -1,20 +1,3 @@
-FROM composer:2 AS vendor
-
-WORKDIR /app
-
-COPY composer.json composer.lock ./
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --no-progress \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
-
-COPY app app
-COPY artisan bootstrap config database public resources routes ./
-RUN composer dump-autoload --optimize
-
 FROM node:22-alpine AS assets
 
 WORKDIR /app
@@ -39,7 +22,7 @@ ENV VITE_APP_NAME="${VITE_APP_NAME}" \
 
 RUN npm run build
 
-FROM php:8.2-fpm-alpine AS app
+FROM php:8.2-fpm-alpine AS php-base
 
 WORKDIR /var/www/html
 
@@ -72,17 +55,30 @@ RUN apk add --no-cache \
     && docker-php-ext-enable redis \
     && rm -rf /tmp/pear
 
+FROM php-base AS vendor
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --no-progress --prefer-dist --no-scripts --no-autoloader
+COPY app app
+COPY database database
+RUN composer dump-autoload --no-dev --optimize --no-scripts
+
+FROM php-base AS app
+
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/production.ini
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/php-fpm/zz-production.conf /usr/local/etc/php-fpm.d/zz-production.conf
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint
 
 COPY --chown=www-data:www-data . .
-COPY --from=vendor --chown=www-data:www-data /app/vendor vendor
+COPY --from=vendor --chown=www-data:www-data /var/www/html/vendor vendor
 COPY --from=assets --chown=www-data:www-data /app/public/build public/build
 
 RUN chmod +x /usr/local/bin/docker-entrypoint \
-    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && sed -i 's/\r$//' /usr/local/bin/docker-entrypoint \
+    && mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && ln -s /var/www/html/storage/app/public public/storage \
     && chown -R www-data:www-data storage bootstrap/cache
 
 USER www-data

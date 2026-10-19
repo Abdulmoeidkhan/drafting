@@ -8,16 +8,19 @@ if [ "${DB_CONNECTION:-}" = "mysql" ] || [ "${DB_CONNECTION:-}" = "mariadb" ]; t
     done
 fi
 
-php artisan storage:link --force >/dev/null 2>&1 || true
+mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs
+php artisan config:clear --no-interaction
+php artisan package:discover --no-interaction
+php artisan storage:link --force --no-interaction
+
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    php artisan migrate --force --no-interaction
+    php artisan view:clear --no-interaction
+fi
 
 if [ "${APP_ENV:-production}" = "production" ]; then
     php artisan config:cache
     php artisan route:cache
-    php artisan view:cache
-fi
-
-if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
-    php artisan migrate --force
 fi
 
 exec "$@"
