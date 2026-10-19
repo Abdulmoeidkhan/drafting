@@ -36,6 +36,7 @@
 
         <!-- Page Header -->
         <div class="page-header">
+            <img src="{{ asset('images/logo.webp') }}" alt="Tournament Logo" class="page-logo">
             <h1><i class="bi bi-people"></i> Participants Management</h1>
             <p>View, approve, and manage participant submissions</p>
         </div>
@@ -106,7 +107,7 @@
                                                 src="{{ asset('storage/' . ltrim($participant->passport_picture, '/')) }}"
                                                 alt="{{ $participant->full_name }}"
                                                 class="rounded"
-                                                style="width: 46px; height: 46px; object-fit: cover;"
+                                                style="width: 150px; height: 150px; object-fit: cover;"
                                             >
                                         @else
                                             <span class="badge text-bg-secondary">No Photo</span>

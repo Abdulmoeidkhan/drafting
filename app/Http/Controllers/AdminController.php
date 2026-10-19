@@ -9,6 +9,7 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -131,13 +132,31 @@ class AdminController extends Controller
      */
     public function users(Request $request)
     {
-        $users = User::with('roles')->paginate(15);
+        $admins = User::with('roles')->whereHas('roles', function ($query) {
+            $query->where('name', 'admin');
+        })->paginate(15);
+        $teams = User::with('roles')->whereHas('roles', function ($query) {
+            $query->where('name', 'team');
+        })->paginate(15);
+        $players = User::with('roles')->whereHas('roles', function ($query) {
+            $query->where('name', 'player');
+        })->paginate(15);
+        $users = User::with('roles')->whereHas('roles', function ($query) {
+            $query->where('name', 'user');
+        })->paginate(15);
+
         $roles = Role::query()->orderBy('name')->pluck('name');
 
         return view('admin.users', [
-            'users' => $users,
+            'users'=>[
+                'admin' => $admins,
+                'team' => $teams,
+                'player' => $players,
+                'user' => $users,
+                ],
             'roles' => $roles,
         ]);
+        // return $roles;
     }
 
     /**
@@ -180,7 +199,7 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,'.$id,
+            'email' => 'required|email|unique:users,email,' . $id,
             'roles' => 'nullable|array',
             'roles.*' => 'exists:roles,name',
         ]);
@@ -198,6 +217,24 @@ class AdminController extends Controller
         $user->syncRoles($selectedRoles);
 
         return back()->with('success', 'User updated successfully');
+    }
+
+    /**
+     * Reset user password
+     */
+    public function resetUserPassword($id, Request $request)
+    {
+        $user = User::findOrFail($id);
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return back()->with('success', 'User password reset successfully');
     }
 
     /**
@@ -242,11 +279,11 @@ class AdminController extends Controller
 
         $participants = $query->orderByDesc('id')->get();
 
-        $filename = 'participants_'.date('Y-m-d_H-i-s').'.csv';
+        $filename = 'participants_' . date('Y-m-d_H-i-s') . '.csv';
 
         $headers = [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
         $callback = function () use ($participants) {
@@ -254,8 +291,18 @@ class AdminController extends Controller
 
             // Headers
             fputcsv($file, [
-                'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 'City', 'Nationality',
-                'League', 'Kit Size', 'Status', 'Passport Photo URL', 'Created At',
+                'ID',
+                'First Name',
+                'Last Name',
+                'Email',
+                'Mobile',
+                'City',
+                'Nationality',
+                'League',
+                'Kit Size',
+                'Status',
+                'Passport Photo URL',
+                'Created At',
             ]);
 
             // Data
@@ -271,7 +318,7 @@ class AdminController extends Controller
                     ucfirst((string) ($p->league_type ?? 'male')),
                     $p->kit_size,
                     $p->status,
-                    $p->passport_picture ? asset('storage/'.ltrim((string) $p->passport_picture, '/')) : '',
+                    $p->passport_picture ? asset('storage/' . ltrim((string) $p->passport_picture, '/')) : '',
                     $p->created_at->format('Y-m-d H:i:s'),
                 ]);
             }
@@ -311,7 +358,7 @@ class AdminController extends Controller
             'nick_name' => 'required|string|max:255',
             'city' => 'required|string|max:255',
             'address' => 'required|string',
-            'email' => 'required|email|unique:participants,email,'.$id,
+            'email' => 'required|email|unique:participants,email,' . $id,
             'dob' => 'required|date',
             'nationality' => 'required|string|max:255',
             'league_type' => ['required', 'string', Rule::exists('leagues', 'slug')],
@@ -363,7 +410,7 @@ class AdminController extends Controller
         $category = Category::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,'.$id,
+            'name' => 'required|string|max:255|unique:categories,name,' . $id,
             'description' => 'nullable|string',
         ]);
 
@@ -410,17 +457,17 @@ class AdminController extends Controller
 
         // Generate meaningful filename
         $fileNameMap = [
-            'passport_picture' => 'Passport_Photo_'.$participant->id.'_'.$participant->full_name,
-            'id_picture' => 'ID_Picture_'.$participant->id.'_'.$participant->full_name,
-            'hotel_reservation' => 'Hotel_Reservation_'.$participant->id.'_'.$participant->full_name,
-            'flight_reservation' => 'Flight_Reservation_'.$participant->id.'_'.$participant->full_name,
+            'passport_picture' => 'Passport_Photo_' . $participant->id . '_' . $participant->full_name,
+            'id_picture' => 'ID_Picture_' . $participant->id . '_' . $participant->full_name,
+            'hotel_reservation' => 'Hotel_Reservation_' . $participant->id . '_' . $participant->full_name,
+            'flight_reservation' => 'Flight_Reservation_' . $participant->id . '_' . $participant->full_name,
         ];
 
         $fileName = $fileNameMap[$field] ?? basename($filePath);
         $originalFileName = basename($filePath);
         $fileExtension = pathinfo($originalFileName, PATHINFO_EXTENSION);
 
-        return Storage::disk('public')->download($filePath, $fileName.'.'.$fileExtension);
+        return Storage::disk('public')->download($filePath, $fileName . '.' . $fileExtension);
     }
 
     /**
@@ -457,7 +504,7 @@ class AdminController extends Controller
     private function ensureParticipantUserAccount(Participant $participant): array
     {
         $email = (string) $participant->email;
-        $displayName = trim($participant->first_name.' '.$participant->last_name);
+        $displayName = trim($participant->first_name . ' ' . $participant->last_name);
         $displayName = $displayName !== '' ? $displayName : ($participant->nick_name ?: 'Player');
 
         $user = User::query()->where('email', $email)->first();
@@ -485,7 +532,7 @@ class AdminController extends Controller
             ];
         }
 
-        $plainPassword = 'Player@'.Str::upper(Str::random(8)).random_int(10, 99);
+        $plainPassword = 'Player@' . Str::upper(Str::random(8)) . random_int(10, 99);
 
         $user = User::create([
             'name' => $displayName,

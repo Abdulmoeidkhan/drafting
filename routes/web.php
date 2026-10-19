@@ -76,5 +76,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/users', [AdminController::class, 'users'])->name('users');
     Route::post('/users', [AdminController::class, 'createUser'])->name('user.create');
     Route::patch('/users/{id}', [AdminController::class, 'editUser'])->name('user.edit');
+    Route::patch('/users/{id}/password', [AdminController::class, 'resetUserPassword'])->name('user.password.reset');
     Route::delete('/users/{id}', [AdminController::class, 'deleteUser'])->name('user.delete');
 });

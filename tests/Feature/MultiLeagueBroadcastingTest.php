@@ -85,6 +85,7 @@ class MultiLeagueBroadcastingTest extends TestCase
             ->post(route('admin.draft.round.start'), [
                 'league_type' => 'legends',
                 'category_id' => $category->id,
+                'picks_per_team' => 1,
                 'turn_time_seconds' => 120,
             ])
             ->assertRedirect();

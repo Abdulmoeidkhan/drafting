@@ -11,10 +11,8 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <div class="icon">
-                <i class="bi bi-shield-lock" style="color: #4f46e5;"></i>
-            </div>
-            <h1>Account Login</h1>
+            <img src="{{ asset('images/logo.webp') }}" alt="KTPL Logo" class="login-logo">
+            <h1>KTPL Account Login</h1>
             <p>Participant Management System</p>
         </div>
 

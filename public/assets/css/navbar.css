@@ -1,6 +1,6 @@
 :root {
-    --app-navbar-bg: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #0ea5e9 100%);
-    --app-navbar-text: #e2e8f0;
+    --app-navbar-bg: linear-gradient(135deg, #007342 0%, #9FC210 100%);
+    --app-navbar-text: #ffffff;
     --app-navbar-text-active: #ffffff;
 }
 
